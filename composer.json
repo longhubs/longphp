@@ -1,0 +1,33 @@
+{
+    "name": "longphp/longphp",
+    "description": "LongPHP Framework - 龙行天下 · 轻量级 PHP 开发框架",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "homepage": "https://github.com/your-username/longphp",
+    "keywords": ["php", "framework", "longphp", "mvc", "blade", "lightweight"],
+    "authors": [
+        {
+            "name": "wang huilong",
+            "email": "289690729@qq.com",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/your-username/longphp/issues",
+        "source": "https://github.com/your-username/longphp"
+    },
+    "require": {
+        "php": ">=7.4",
+        "eftec/bladeone": "^4.1"
+    },
+    "require-dev": {
+        "firebase/php-jwt": "^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Long\\": "src/"
+        }
+    },
+    "minimum-stability": "stable"
+}
