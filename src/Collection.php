@@ -32,6 +32,45 @@ class Collection
     }
 
     /**
+     * 转为数组（支持模型对象递归转换）
+     * @return array
+     */
+    public function toArray()
+    {
+        $result = [];
+        foreach ($this->items as $item) {
+            if (is_object($item) && method_exists($item, 'toArray')) {
+                $result[] = $item->toArray();
+            } elseif (is_array($item)) {
+                $result[] = $this->arrayToArray($item);
+            } else {
+                $result[] = $item;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * 递归转换数组中的对象
+     * @param array $array
+     * @return array
+     */
+    protected function arrayToArray($array)
+    {
+        $result = [];
+        foreach ($array as $key => $value) {
+            if (is_object($value) && method_exists($value, 'toArray')) {
+                $result[$key] = $value->toArray();
+            } elseif (is_array($value)) {
+                $result[$key] = $this->arrayToArray($value);
+            } else {
+                $result[$key] = $value;
+            }
+        }
+        return $result;
+    }
+    // ─── 过滤 ───
+    /**
      * 按条件过滤（等于）
      * @param string $field 字段名
      * @param mixed $value 值
@@ -51,9 +90,6 @@ class Collection
 
     /**
      * 按条件过滤（大于）
-     * @param string $field 字段名
-     * @param mixed $value 值
-     * @return self
      */
     public function whereGt($field, $value)
     {
@@ -84,9 +120,6 @@ class Collection
 
     /**
      * 按条件过滤（IN）
-     * @param string $field 字段名
-     * @param array $values 值数组
-     * @return self
      */
     public function whereIn($field, $values)
     {
@@ -100,10 +133,10 @@ class Collection
         return new self($result);
     }
 
+    // ─── 提取 ───
+
     /**
      * 获取指定字段的值列表
-     * @param string $field 字段名
-     * @return self
      */
     public function pluck($field)
     {
@@ -116,9 +149,6 @@ class Collection
 
     /**
      * 获取指定字段的键值对
-     * @param string $keyField 键字段
-     * @param string $valueField 值字段
-     * @return self
      */
     public function pluckMap($keyField, $valueField)
     {
@@ -133,8 +163,6 @@ class Collection
 
     /**
      * 按字段分组
-     * @param string $field 分组字段
-     * @return self
      */
     public function groupBy($field)
     {
@@ -149,11 +177,10 @@ class Collection
         return new self($result);
     }
 
+    // ─── 排序 ───
+
     /**
      * 按字段排序
-     * @param string $field 排序字段
-     * @param string $direction ASC / DESC
-     * @return self
      */
     public function sortBy($field, $direction = 'ASC')
     {
@@ -171,94 +198,49 @@ class Collection
         return new self($result);
     }
 
-    /**
-     * 取前 N 条
-     * @param int $limit 数量
-     * @return self
-     */
+    // ─── 截取 ───
+
     public function take($limit)
     {
         return new self(array_slice($this->items, 0, $limit));
     }
 
-    /**
-     * 跳过 N 条
-     * @param int $skip 数量
-     * @return self
-     */
     public function skip($skip)
     {
         return new self(array_slice($this->items, $skip));
     }
 
-    /**
-     * 取第一条
-     * @return mixed
-     */
+    // ─── 获取单条 ───
+
     public function first()
     {
         return $this->items[0] ?? null;
     }
 
-    /**
-     * 取最后一条
-     * @return mixed
-     */
     public function last()
     {
         return end($this->items) ?: null;
     }
 
-    /**
-     * 获取数量
-     * @return int
-     */
+    // ─── 统计 ───
+
     public function count()
     {
         return count($this->items);
     }
 
-    /**
-     * 是否为空
-     * @return bool
-     */
     public function isEmpty()
     {
         return empty($this->items);
     }
 
-    /**
-     * 是否不为空
-     * @return bool
-     */
     public function isNotEmpty()
     {
         return !empty($this->items);
     }
 
-    /**
-     * 转为数组
-     * @return array
-     */
-    public function toArray()
-    {
-        return $this->items;
-    }
+    // ─── 遍历 ───
 
-    /**
-     * 转为 JSON
-     * @return string
-     */
-    public function toJson()
-    {
-        return json_encode($this->items, JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
-     * 遍历并返回新集合
-     * @param callable $callback
-     * @return self
-     */
     public function map($callback)
     {
         $result = [];
@@ -268,11 +250,8 @@ class Collection
         return new self($result);
     }
 
-    /**
-     * 聚合：求和
-     * @param string $field 字段名
-     * @return float
-     */
+    // ─── 聚合 ───
+
     public function sum($field)
     {
         $total = 0;
@@ -282,21 +261,13 @@ class Collection
         return $total;
     }
 
-    /**
-     * 聚合：平均值
-     */
     public function avg($field)
     {
         $count = $this->count();
-        if ($count === 0) {
-            return 0;
-        }
+        if ($count === 0) return 0;
         return $this->sum($field) / $count;
     }
 
-    /**
-     * 聚合：最大值
-     */
     public function max($field)
     {
         $max = null;
@@ -309,9 +280,6 @@ class Collection
         return $max;
     }
 
-    /**
-     * 聚合：最小值
-     */
     public function min($field)
     {
         $min = null;
@@ -324,9 +292,13 @@ class Collection
         return $min;
     }
 
-    /**
-     * 转字符串
-     */
+    // ─── 输出 ───
+
+    public function toJson()
+    {
+        return json_encode($this->toArray(), JSON_UNESCAPED_UNICODE);
+    }
+
     public function __toString()
     {
         return $this->toJson();

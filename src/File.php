@@ -132,6 +132,8 @@ class File
             $this->error = $this->getUploadError($this->file['error']);
             return false;
         }
+        
+        $ext = strtolower(pathinfo($this->file['name'], PATHINFO_EXTENSION));
 
         if ($this->maxSize > 0 && $this->file['size'] > $this->maxSize) {
             $this->error = '文件大小超过限制（最大 ' . static::formatSize($this->maxSize) . '）';
@@ -139,7 +141,7 @@ class File
         }
 
         if (!empty($this->allowTypes)) {
-            $ext = strtolower(pathinfo($this->file['name'], PATHINFO_EXTENSION));
+            
             if (!in_array($ext, $this->allowTypes)) {
                 $this->error = '不允许的文件类型: ' . $ext;
                 return false;
@@ -202,12 +204,20 @@ class File
         $filename = $name . '.' . $ext;
 
         $savePath = rtrim($path, '/') . '/' . $filename;
-        if (move_uploaded_file($this->file['tmp_name'], $savePath)) {
-            return $filename;
+        if (!move_uploaded_file($this->file['tmp_name'], $savePath)) {
+            $this->error = '文件保存失败';
         }
-
-        $this->error = '文件保存失败';
-        return false;
+        $result = [
+                'name' => $filename,
+                'path' => $savePath,
+                'size' => $this->file['size'],
+                'type' => $this->file['type'],
+                'ext' => $ext,
+                'width' => 0,
+                'height' => 0,
+                'error' => $this->error
+            ];
+        return $result;
     }
 
     /**
@@ -233,15 +243,17 @@ class File
         $this->ensureDirectory($path);
 
         $ext = strtolower(pathinfo($this->file['name'], PATHINFO_EXTENSION));
+        $orgName = $name?$name:$this->file['name'];
         $name = $name ?: date('YmdHis') . '_' . uniqid();
         $filename = $name . '.' . $ext;
-
+        
         $result = [
-            'name'   => $filename,
+            'name'   => $orgName,
             'path'   => $path . '/' . $filename,
             'width'  => $width,
             'height' => $height,
             'size'   => $this->file['size'],
+            'ext'    => $ext,
             'thumbs' => []
         ];
 

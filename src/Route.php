@@ -8,6 +8,7 @@ class Route
 {
     private $routes = [];
     private $currentGroup = null;
+    private $missHandler = null;
 
     // ─────────────────────────────────────────────────────────────
     // 路由注册
@@ -52,11 +53,9 @@ class Route
 
     /**
      * 注册路由（支持所有请求方法）
-     * 类似 ThinkPHP 6 的 Route::rule()
      */
     public function rule($uri, $handler, $method = 'ANY', $middleware = [])
     {
-        // 处理多个方法（字符串用 | 分隔）
         if (is_string($method) && strpos($method, '|') !== false) {
             $methods = explode('|', $method);
             foreach ($methods as $m) {
@@ -65,7 +64,6 @@ class Route
             return $this;
         }
         
-        // 处理方法数组
         if (is_array($method)) {
             foreach ($method as $m) {
                 $this->add(trim($m), $uri, $handler, $middleware);
@@ -73,7 +71,6 @@ class Route
             return $this;
         }
         
-        // 单个方法
         return $this->add($method, $uri, $handler, $middleware);
     }
 
@@ -106,6 +103,27 @@ class Route
     }
 
     // ─────────────────────────────────────────────────────────────
+    // 404 路由
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * 注册 404 路由（miss 方法）
+     */
+    public function miss($handler)
+    {
+        $this->missHandler = $handler;
+        return $this;
+    }
+
+    /**
+     * 获取 404 处理器
+     */
+    public function getMissHandler()
+    {
+        return $this->missHandler;
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // 调试方法
     // ─────────────────────────────────────────────────────────────
 
@@ -123,6 +141,7 @@ class Route
         $method = $request->method();
         $uri = $this->normalizeUri($request->path());
 
+        // 1. 先匹配普通路由
         foreach ($this->routes as $route) {
             // 方法匹配（ANY 匹配所有）
             if ($route['method'] !== 'ANY' && $route['method'] !== $method) {
@@ -132,17 +151,44 @@ class Route
             // 处理分组前缀
             $routeUri = $this->buildRouteUri($route);
 
+            // ✅ 跳过通配符 *（不在这里处理）
+            if ($routeUri === '*' || $routeUri === '/*') {
+                continue;
+            }
+
             // 静态匹配
             if ($routeUri === $uri) {
                 return $this->buildRouteInfo($route, $uri);
             }
 
+            // ✅ 只有非通配符才进行正则匹配
             // 动态匹配
             $pattern = '#^' . preg_replace('/\{[a-zA-Z_]+\}/', '([a-zA-Z0-9_\-]+)', $routeUri) . '$#';
             if (preg_match($pattern, $uri, $matches)) {
                 array_shift($matches);
                 return $this->buildRouteInfo($route, $uri, $matches);
             }
+        }
+
+        // 2. 匹配通配符路由 *（any('*')）
+        foreach ($this->routes as $route) {
+            $routeUri = $this->buildRouteUri($route);
+            if (($routeUri === '*' || $routeUri === '/*') && $route['method'] === 'ANY') {
+                return $this->buildRouteInfo($route, $uri);
+            }
+        }
+
+        // 3. 匹配通配符路由 *（指定方法）
+        foreach ($this->routes as $route) {
+            $routeUri = $this->buildRouteUri($route);
+            if (($routeUri === '*' || $routeUri === '/*') && $route['method'] === $method) {
+                return $this->buildRouteInfo($route, $uri);
+            }
+        }
+
+        // 4. 使用 miss 方法（404）
+        if ($this->missHandler) {
+            return $this->buildMissRouteInfo($uri);
         }
 
         return null;
@@ -167,7 +213,11 @@ class Route
     {
         $uri = $route['uri'];
         
-        // 处理空字符串
+        // 通配符 * 直接返回，不处理分组前缀
+        if ($uri === '*' || $uri === '/*') {
+            return $uri;
+        }
+        
         if ($uri === '') {
             $uri = '/';
         }
@@ -193,7 +243,6 @@ class Route
             $middleware = array_merge($route['group']['middleware'], $middleware);
         }
 
-        // 闭包路由
         if (is_callable($handler)) {
             return [
                 'controller' => $handler,
@@ -204,7 +253,6 @@ class Route
             ];
         }
 
-        // 控制器路由
         list($controller, $action) = explode('@', $handler);
         if (strpos($controller, '\\') === false) {
             $controller = 'App\\Controller\\' . $controller;
@@ -216,6 +264,39 @@ class Route
             'params'     => $params,
             'middleware' => $middleware,
             'is_closure' => false
+        ];
+    }
+
+    /**
+     * 构建 404 路由信息
+     */
+    private function buildMissRouteInfo($uri)
+    {
+        $handler = $this->missHandler;
+
+        if (is_callable($handler)) {
+            return [
+                'controller' => $handler,
+                'action'     => '__invoke',
+                'params'     => [],
+                'middleware' => [],
+                'is_closure' => true,
+                'is_miss'    => true
+            ];
+        }
+
+        list($controller, $action) = explode('@', $handler);
+        if (strpos($controller, '\\') === false) {
+            $controller = 'App\\Controller\\' . $controller;
+        }
+
+        return [
+            'controller' => $controller,
+            'action'     => $action,
+            'params'     => [],
+            'middleware' => [],
+            'is_closure' => false,
+            'is_miss'    => true
         ];
     }
 }

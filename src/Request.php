@@ -6,7 +6,17 @@ namespace Long;
 class Request
 {
     private $get, $post, $json, $server, $files, $cookies, $rawBody, $method, $path = '/', $routeParams = [], $user = [];
+    /**
+     * 当前控制器名
+     * @var string
+     */
+    protected $controller = '';
 
+    /**
+     * 当前方法名（操作名）
+     * @var string
+     */
+    protected $action = '';
     public function __construct()
     {
         $this->get = $_GET;
@@ -34,6 +44,48 @@ class Request
             parse_str($this->rawBody, $parsed);
             if (!empty($parsed)) $this->post = $parsed;
         }
+    }
+    /**
+     * 设置当前控制器名（由框架调用）
+     * @param string $controller
+     */
+    public function setController($controller)
+    {
+        $this->controller = $controller;
+    }
+
+    /**
+     * 设置当前方法名（由框架调用）
+     * @param string $action
+     */
+    public function setAction($action)
+    {
+        $this->action = $action;
+    }
+
+    /**
+     * 获取当前控制器名
+     * @param bool $full 是否返回完整命名空间
+     * @return string
+     */
+    public function controller($full = false)
+    {
+        if ($full) {
+            return $this->controller;
+        }
+        // 只返回类名（去掉命名空间）
+        $parts = explode('\\', $this->controller);
+        return end($parts);
+    }
+
+    /**
+     * 获取当前方法名（操作名）
+     * @param bool $full 是否返回完整方法名
+     * @return string
+     */
+    public function action($full = false)
+    {
+        return $this->action;
     }
     /**
      * 获取所有参数（包含所有请求方式）

@@ -397,6 +397,10 @@ class App
         $action = $routeInfo['action'];
         $params = $routeInfo['params'] ?? [];
 
+        // ✅ 设置控制器名和方法名到 Request
+        $this->request->setController($controllerClass);
+        $this->request->setAction($action);
+
         if (!class_exists($controllerClass)) {
             return "控制器不存在: {$controllerClass}";
         }

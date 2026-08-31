@@ -5,7 +5,7 @@
 
 namespace Long;
 
-use Long\View\View;
+use Long\View;
 
 class Controller
 {
@@ -28,6 +28,11 @@ class Controller
     {
         $this->request = new Request();
         $this->codes = require ROOT_PATH . '/config/response.php';
+
+        // ✅ 自动调用 initialize()（如果子类定义了该方法）
+        if (method_exists($this, 'initialize')) {
+            $this->initialize();
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -41,11 +46,15 @@ class Controller
      * @param string $engine 引擎：blade 或 php
      * @return string
      */
-    protected function view($view, $data = [], $engine = 'blade')
+    protected function view($view, $data = [], $engine = 'auto')
     {
         return View::render($view, $data, $engine);
     }
-
+    protected function assign($name, $value = null)
+    {
+        View::assign($name, $value);
+        return $this;
+    }
     // ─────────────────────────────────────────────────────────────
     // JSON 响应
     // ─────────────────────────────────────────────────────────────

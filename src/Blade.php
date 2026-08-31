@@ -1,7 +1,9 @@
 <?php
-// src/view/Blade.php
+// src/Blade.php
+// LongPHP Framework - Blade 模板引擎封装
+// 龙行天下 🐉
 
-namespace Long\view;
+namespace Long;
 
 use eftec\bladeone\BladeOne;
 
@@ -33,6 +35,9 @@ class Blade
             BladeOne::MODE_DEBUG
         );
 
+        // ✅ 设置文件扩展名
+        self::$instance->setFileExtension('.blade.php');
+
         self::registerDirectives();
 
         return self::$instance;
@@ -46,6 +51,10 @@ class Blade
             return "<?php echo date('Y-m-d H:i:s', {$expression}); ?>";
         });
 
+        $blade->directive('config', function($expression) {
+            return "<?php echo config({$expression}); ?>";
+        });
+
         $blade->directive('auth', function() {
             return "<?php if (function_exists('jwt_user') && jwt_user()): ?>";
         });
@@ -54,8 +63,16 @@ class Blade
             return "<?php endif; ?>";
         });
 
-        $blade->directive('config', function($expression) {
-            return "<?php echo config({$expression}); ?>";
+        $blade->directive('guest', function() {
+            return "<?php if (!function_exists('jwt_user') || !jwt_user()): ?>";
+        });
+
+        $blade->directive('endguest', function() {
+            return "<?php endif; ?>";
+        });
+
+        $blade->directive('url', function($expression) {
+            return "<?php echo U({$expression}); ?>";
         });
     }
 
@@ -64,9 +81,13 @@ class Blade
         $blade = self::init();
         
         // ✅ 将 user.detail → user/detail.blade.php
-        $viewFile = str_replace('.', '/', $view) . '.blade.php';
+        $view = str_replace('.', '/', $view) . '.blade.php';
         
-        return $blade->run($viewFile, $data);
+        try {
+            return $blade->run($view, $data);
+        } catch (\Exception $e) {
+            die("Blade 渲染错误: " . $e->getMessage() . "\n文件: " . $e->getFile() . " (第 " . $e->getLine() . " 行)");
+        }
     }
 
     public static function display($view, $data = [])

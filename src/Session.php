@@ -18,7 +18,11 @@ class Session
      * @var array
      */
     protected static $config = [];
-
+    /**
+     * 单例实例
+     * @var self
+     */
+    protected static $instance = null;
     /**
      * 初始化 Session
      * @param array $config 配置
@@ -51,6 +55,18 @@ class Session
         ]);
 
         self::start();
+    }
+
+    /**
+     * 获取单例实例
+     * @return self
+     */
+    public static function getInstance()
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
     }
     /**
      * 启动 Session

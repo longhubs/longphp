@@ -1,45 +1,73 @@
 <?php
-// long/View.php
-// LongPHP Framework - 视图渲染
+// src/View.php
+// LongPHP Framework - 视图管理
+// 龙行天下 🐉
 
 namespace Long;
 
 class View
 {
-    private static $config = [];
+    protected static $vars = [];
 
-    public static function setConfig($config): void
+    public static function assign($name, $value = null)
     {
-        self::$config = $config;
+        if (is_array($name)) {
+            foreach ($name as $key => $val) {
+                self::$vars[$key] = $val;
+            }
+        } else {
+            self::$vars[$name] = $value;
+        }
     }
 
-    public static function render(string $view, array $data = [], ?string $layout = null): string
+    public static function getAssign($name = null)
     {
-        // 提取数据为变量
+        if ($name === null) {
+            return self::$vars;
+        }
+        return self::$vars[$name] ?? null;
+    }
+
+    public static function clearAssign()
+    {
+        self::$vars = [];
+    }
+
+    public static function render($view, $data = [], $engine = 'auto')
+    {
+        $allData = array_merge(self::$vars, $data);
+        $viewPath = str_replace('.', '/', $view);
+
+        // ✅ 检查 Blade 文件
+        $bladeFile = ROOT_PATH . '/app/views/' . $viewPath . '.blade.php';
+        if ($engine === 'auto' && file_exists($bladeFile)) {
+            $engine = 'blade';
+        } elseif ($engine === 'auto') {
+            $engine = 'php';
+        }
+
+        if ($engine === 'blade') {
+            // ✅ 直接调用 Blade::render()
+            return Blade::render($view, $allData);
+        }
+
+        return self::renderPhp($view, $allData);
+    }
+
+    protected static function renderPhp($view, $data = [])
+    {
         extract($data);
-        
-        // 视图文件路径（根目录下的 views 文件夹）
-        $viewPath = __DIR__ . '/../views/' . str_replace('.', '/', $view) . '.php';
-        
-        if (!file_exists($viewPath)) {
-            throw new \Exception("视图文件不存在: {$viewPath}");
+        $viewFile = ROOT_PATH . '/app/views/' . str_replace('.', '/', $view) . '.php';
+        if (!file_exists($viewFile)) {
+            throw new \Exception("视图文件不存在: {$viewFile}");
         }
-        
-        // 开启输出缓冲
         ob_start();
-        include $viewPath;
-        $content = ob_get_clean();
-        
-        // 如果指定了布局文件
-        if ($layout) {
-            $layoutPath = __DIR__ . '/../views/' . str_replace('.', '/', $layout) . '.php';
-            if (file_exists($layoutPath)) {
-                ob_start();
-                include $layoutPath;
-                return ob_get_clean();
-            }
-        }
-        
-        return $content;
+        include $viewFile;
+        return ob_get_clean();
+    }
+
+    public static function display($view, $data = [], $engine = 'auto')
+    {
+        echo self::render($view, $data, $engine);
     }
 }

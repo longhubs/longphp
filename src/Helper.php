@@ -6,6 +6,7 @@
 use Long\Db;
 use Long\Csrf;
 use Long\Cache\CacheManager;
+use Long\Token;
 
 // ═══════════════════════════════════════════════════════════════════════
 // 1. 事件系统
@@ -193,7 +194,7 @@ if (!function_exists('success')) {
      * @return string JSON 字符串
      * @example success(['user' => $user], '获取成功');
      */
-    function success($data = [], $msg = 'success', $code = 0)
+    function success($msg = 'success', $data = [], $code = 0)
     {
         header('Content-Type: application/json');
         return json_encode([
@@ -263,10 +264,7 @@ if (!function_exists('input')) {
      */
     function input($key = null, $default = null)
     {
-        static $request;
-        if (!$request) {
-            $request = new \Long\Request();
-        }
+        $request = request();
         if ($key === null) {
             return $request->all();
         }
@@ -276,15 +274,12 @@ if (!function_exists('input')) {
 
 if (!function_exists('request')) {
     /**
-     * 获取 Request 请求对象
-     * 
+     * 获取 Request 请求对象（从 App 获取）
      * @return \Long\Request
-     * @example $request = request();
-     * @example $id = request()->param('id');
      */
     function request()
     {
-        return new \Long\Request();
+        return \Long\App::getInstance()->getRequest();
     }
 }
 
@@ -591,10 +586,7 @@ if (!function_exists('get_csrf_token')) {
      */
     function get_csrf_token()
     {
-        static $request;
-        if (!$request) {
-            $request = new \Long\Request();
-        }
+        $request = request();
         
         $token = $request->header('X-CSRF-TOKEN', '');
         if (empty($token)) {
@@ -605,49 +597,7 @@ if (!function_exists('get_csrf_token')) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 14. JWT Token 获取
-// ═══════════════════════════════════════════════════════════════════════
-
-if (!function_exists('token')) {
-    /**
-     * 从当前请求中获取 JWT Token
-     * 
-     * 支持从以下位置获取（按优先级）：
-     * 1. Header: Authorization: Bearer xxx
-     * 2. Header: token: xxx
-     * 3. GET 参数: ?token=xxx
-     * 
-     * @return string|null 不存在返回 null
-     * @example $token = token();
-     * @example $user = jwt_verify(token());
-     */
-    function token()
-    {
-        // 从 Authorization Header 获取
-        if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
-            $auth = $_SERVER['HTTP_AUTHORIZATION'];
-            if (strpos($auth, 'Bearer ') === 0) {
-                return substr($auth, 7);
-            }
-            return $auth;
-        }
-        
-        // 从自定义 Header 获取
-        if (isset($_SERVER['HTTP_TOKEN'])) {
-            return $_SERVER['HTTP_TOKEN'];
-        }
-        
-        // 从 GET 参数获取
-        if (isset($_GET['token'])) {
-            return $_GET['token'];
-        }
-        
-        return null;
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// 15. ThinkPHP 3.2 风格字母方法
+// 14. ThinkPHP 3.2 风格字母方法
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('I')) {
@@ -665,16 +615,12 @@ if (!function_exists('I')) {
      */
     function I($name = null, $default = null, $filter = '')
     {
-        static $request;
-        if (!$request) {
-            $request = new \Long\Request();
-        }
+        $request = request();
 
         if ($name === null || $name === '') {
             return $request->all();
         }
 
-        // 没有指定来源，自动查找
         if (strpos($name, '.') === false) {
             $value = $default;
             
@@ -700,7 +646,6 @@ if (!function_exists('I')) {
             return $value;
         }
 
-        // 指定来源
         $parts = explode('.', $name);
         $method = strtolower($parts[0]);
         $key = $parts[1] ?? '';
@@ -769,12 +714,10 @@ if (!function_exists('U')) {
      */
     function U($url, $params = [], $full = false)
     {
-        // 处理首页
         if ($url === 'index' || $url === 'index/index') {
             $url = '';
         }
         
-        // 去掉 /index 结尾
         if (substr($url, -6) === '/index') {
             $url = substr($url, 0, -6);
         }
@@ -907,7 +850,7 @@ if (!function_exists('E')) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 16. 常用工具方法
+// 15. 常用工具方法
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('get_ip')) {
@@ -947,7 +890,6 @@ if (!function_exists('get_browser_info')) {
         $browser = '未知';
         $platform = '未知';
         
-        // 操作系统检测
         if (strpos($userAgent, 'Windows NT 10.0') !== false) {
             $platform = 'Windows 10';
         } elseif (strpos($userAgent, 'Windows NT 6.1') !== false) {
@@ -962,7 +904,6 @@ if (!function_exists('get_browser_info')) {
             $platform = 'Android';
         }
         
-        // 浏览器检测
         if (strpos($userAgent, 'Edg') !== false) {
             $browser = 'Edge';
         } elseif (strpos($userAgent, 'Chrome') !== false && strpos($userAgent, 'Edg') === false) {
@@ -1170,7 +1111,7 @@ if (!function_exists('api_result')) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 17. Cookie 快捷操作
+// 16. Cookie 快捷操作
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('cookie')) {
@@ -1193,17 +1134,14 @@ if (!function_exists('cookie')) {
      */
     function cookie($name, $value = null, $expire = 0, $path = '/', $domain = '', $secure = false, $httponly = true, $samesite = 'lax')
     {
-        // 删除 Cookie
         if ($value === null && func_num_args() === 2) {
             return \Long\Cookie::delete($name, $path, $domain);
         }
         
-        // 设置 Cookie
         if (func_num_args() >= 2) {
             return \Long\Cookie::set($name, $value, $expire, $path, $domain, $secure, $httponly, $samesite);
         }
         
-        // 获取 Cookie
         return \Long\Cookie::get($name);
     }
 }
@@ -1302,7 +1240,7 @@ if (!function_exists('clear_cookie')) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 18. HTTP 请求（远程请求）
+// 17. HTTP 请求（远程请求）
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('http_get')) {
@@ -1416,13 +1354,11 @@ if (!function_exists('http_download')) {
             ];
         }
         
-        // 确保目录存在
         $dir = dirname($savePath);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
         
-        // 保存文件
         $bytes = file_put_contents($savePath, $result['body']);
         if ($bytes === false) {
             return ['code' => false, 'error' => '文件写入失败'];
@@ -1453,47 +1389,32 @@ if (!function_exists('http_request')) {
     {
         $ch = curl_init();
         
-        // 设置请求方法
         $method = strtoupper($method);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         
-        // 设置 URL
         curl_setopt($ch, CURLOPT_URL, $url);
         
-        // 设置请求头
         if (!empty($headers)) {
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         }
         
-        // 设置数据
         if ($method === 'POST' && !empty($data)) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
         } elseif (in_array($method, ['PUT', 'PATCH']) && !empty($data)) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
         } elseif ($method === 'GET' && is_array($data) && !empty($data)) {
-            // GET 参数拼接
             $url .= (strpos($url, '?') === false ? '?' : '&') . http_build_query($data);
             curl_setopt($ch, CURLOPT_URL, $url);
         }
         
-        // 返回内容
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        
-        // 超时
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        
-        // 跟随重定向
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
-        
-        // SSL（生产环境建议 true）
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        
-        // 用户代理
         curl_setopt($ch, CURLOPT_USERAGENT, 'LongPHP Framework/1.0');
         
-        // 执行
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
@@ -1515,23 +1436,11 @@ if (!function_exists('http_request')) {
     }
 }
 
-// src/Helper.php
-
 // ═══════════════════════════════════════════════════════════════════════
-// 20. 数组操作
+// 18. 数组操作
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('array_column_values')) {
-    /**
-     * 获取数组中指定字段的所有值（支持点号获取嵌套）
-     * 
-     * @param array $array 数据数组
-     * @param string $field 字段名（支持点号，如 'user.id'）
-     * @return array
-     * @example
-     * $users = [['id' => 1, 'name' => '张三'], ['id' => 2, 'name' => '李四']];
-     * $ids = array_column_values($users, 'id'); // [1, 2]
-     */
     function array_column_values($array, $field)
     {
         $result = [];
@@ -1546,18 +1455,6 @@ if (!function_exists('array_column_values')) {
 }
 
 if (!function_exists('array_contains')) {
-    /**
-     * 检查数组中是否包含某个字段的指定值
-     * 
-     * @param array $array 数据数组
-     * @param string $field 字段名
-     * @param mixed $value 要查找的值
-     * @return bool
-     * @example
-     * $users = [['id' => 1, 'name' => '张三'], ['id' => 2, 'name' => '李四']];
-     * array_contains($users, 'id', 1); // true
-     * array_contains($users, 'name', '王五'); // false
-     */
     function array_contains($array, $field, $value)
     {
         foreach ($array as $item) {
@@ -1571,17 +1468,6 @@ if (!function_exists('array_contains')) {
 }
 
 if (!function_exists('array_find')) {
-    /**
-     * 查找数组中第一个匹配指定字段值的元素
-     * 
-     * @param array $array 数据数组
-     * @param string $field 字段名
-     * @param mixed $value 要查找的值
-     * @return array|null 找到返回元素，否则返回 null
-     * @example
-     * $user = array_find($users, 'id', 1);
-     * $user = array_find($users, 'name', '张三');
-     */
     function array_find($array, $field, $value)
     {
         foreach ($array as $item) {
@@ -1595,16 +1481,6 @@ if (!function_exists('array_find')) {
 }
 
 if (!function_exists('array_find_all')) {
-    /**
-     * 查找数组中所有匹配指定字段值的元素
-     * 
-     * @param array $array 数据数组
-     * @param string $field 字段名
-     * @param mixed $value 要查找的值
-     * @return array
-     * @example
-     * $users = array_find_all($users, 'status', 1);
-     */
     function array_find_all($array, $field, $value)
     {
         $result = [];
@@ -1619,15 +1495,6 @@ if (!function_exists('array_find_all')) {
 }
 
 if (!function_exists('array_to_json')) {
-    /**
-     * 将数组转换为 JSON（自动处理中文）
-     * 
-     * @param array $array 数据数组
-     * @param int $options JSON 选项
-     * @return string JSON 字符串
-     * @example
-     * $json = array_to_json($users);
-     */
     function array_to_json($array, $options = JSON_UNESCAPED_UNICODE)
     {
         return json_encode($array, $options);
@@ -1635,21 +1502,6 @@ if (!function_exists('array_to_json')) {
 }
 
 if (!function_exists('array_group')) {
-    /**
-     * 按指定字段对数组进行分组
-     * 
-     * @param array $array 数据数组
-     * @param string $field 分组字段
-     * @return array
-     * @example
-     * $users = [
-     *   ['id' => 1, 'status' => 1, 'name' => '张三'],
-     *   ['id' => 2, 'status' => 0, 'name' => '李四'],
-     *   ['id' => 3, 'status' => 1, 'name' => '王五'],
-     * ];
-     * $grouped = array_group($users, 'status');
-     * // [1 => [['id'=>1,'name'=>'张三'], ['id'=>3,'name'=>'王五']], 0 => [['id'=>2,'name'=>'李四']]]
-     */
     function array_group($array, $field)
     {
         $result = [];
@@ -1665,17 +1517,6 @@ if (!function_exists('array_group')) {
 }
 
 if (!function_exists('array_pluck')) {
-    /**
-     * 获取数组中指定字段的值（支持多个字段）
-     * 
-     * @param array $array 数据数组
-     * @param string|array $fields 字段名或字段数组
-     * @return array
-     * @example
-     * $users = [['id' => 1, 'name' => '张三', 'age' => 20], ['id' => 2, 'name' => '李四', 'age' => 25]];
-     * array_pluck($users, 'name'); // ['张三', '李四']
-     * array_pluck($users, ['id', 'name']); // [[1,'张三'], [2,'李四']]
-     */
     function array_pluck($array, $fields)
     {
         $result = [];
@@ -1695,18 +1536,6 @@ if (!function_exists('array_pluck')) {
 }
 
 if (!function_exists('data_get')) {
-    /**
-     * 使用点号从数组/对象中获取值
-     * 
-     * @param array|object $target 目标数据
-     * @param string $key 键名（支持点号，如 'user.profile.name'）
-     * @param mixed $default 默认值
-     * @return mixed
-     * @example
-     * $data = ['user' => ['profile' => ['name' => '张三']]];
-     * data_get($data, 'user.profile.name'); // '张三'
-     * data_get($data, 'user.age', 0); // 0
-     */
     function data_get($target, $key, $default = null)
     {
         if ($key === null || $key === '') {
@@ -1744,18 +1573,6 @@ if (!function_exists('data_get')) {
 }
 
 if (!function_exists('data_set')) {
-    /**
-     * 使用点号设置数组/对象的值
-     * 
-     * @param array $target 目标数组（引用）
-     * @param string $key 键名（支持点号）
-     * @param mixed $value 要设置的值
-     * @return void
-     * @example
-     * $data = [];
-     * data_set($data, 'user.profile.name', '张三');
-     * // $data = ['user' => ['profile' => ['name' => '张三']]]
-     */
     function data_set(&$target, $key, $value)
     {
         if ($key === null || $key === '') {
@@ -1780,18 +1597,6 @@ if (!function_exists('data_set')) {
 }
 
 if (!function_exists('array_sort')) {
-    /**
-     * 按指定字段对数组进行排序（不改变键名）
-     * 
-     * @param array $array 数据数组（引用）
-     * @param string $field 排序字段
-     * @param string $direction 排序方向（ASC / DESC）
-     * @param int $sortFlag 排序标志（SORT_REGULAR / SORT_NUMERIC / SORT_STRING）
-     * @return void
-     * @example
-     * $users = [['id' => 3, 'name' => '王五'], ['id' => 1, 'name' => '张三']];
-     * array_sort($users, 'id', 'ASC');
-     */
     function array_sort(&$array, $field, $direction = 'ASC', $sortFlag = SORT_REGULAR)
     {
         $direction = strtoupper($direction);
@@ -1815,16 +1620,6 @@ if (!function_exists('array_sort')) {
 }
 
 if (!function_exists('array_unique_by')) {
-    /**
-     * 按指定字段对数组去重
-     * 
-     * @param array $array 数据数组
-     * @param string $field 去重字段
-     * @return array
-     * @example
-     * $users = [['id' => 1, 'name' => '张三'], ['id' => 2, 'name' => '张三']];
-     * $unique = array_unique_by($users, 'name'); // 保留第一个
-     */
     function array_unique_by($array, $field)
     {
         $result = [];
@@ -1841,17 +1636,6 @@ if (!function_exists('array_unique_by')) {
 }
 
 if (!function_exists('array_index_by')) {
-    /**
-     * 将数组按指定字段重组为以该字段值为键的索引数组
-     * 
-     * @param array $array 数据数组
-     * @param string $field 索引字段
-     * @return array
-     * @example
-     * $users = [['id' => 1, 'name' => '张三'], ['id' => 2, 'name' => '李四']];
-     * $indexed = array_index_by($users, 'id');
-     * // [1 => ['id'=>1,'name'=>'张三'], 2 => ['id'=>2,'name'=>'李四']]
-     */
     function array_index_by($array, $field)
     {
         $result = [];
@@ -1862,23 +1646,8 @@ if (!function_exists('array_index_by')) {
         return $result;
     }
 }
-// ─── 统计数量 ───
 
 if (!function_exists('array_count_by')) {
-    /**
-     * 按指定字段统计数量（返回每个值的出现次数）
-     * 
-     * @param array $array 数据数组
-     * @param string $field 统计字段
-     * @return array
-     * @example
-     * $users = [
-     *   ['id' => 1, 'status' => 1],
-     *   ['id' => 2, 'status' => 0],
-     *   ['id' => 3, 'status' => 1],
-     * ];
-     * array_count_by($users, 'status'); // [1 => 2, 0 => 1]
-     */
     function array_count_by($array, $field)
     {
         $result = [];
@@ -1894,21 +1663,6 @@ if (!function_exists('array_count_by')) {
 }
 
 if (!function_exists('array_count_value')) {
-    /**
-     * 统计数组中某个字段值出现的次数
-     * 
-     * @param array $array 数据数组
-     * @param string $field 字段名
-     * @param mixed $value 要统计的值
-     * @return int
-     * @example
-     * $users = [
-     *   ['id' => 1, 'status' => 1],
-     *   ['id' => 2, 'status' => 0],
-     *   ['id' => 3, 'status' => 1],
-     * ];
-     * array_count_value($users, 'status', 1); // 2
-     */
     function array_count_value($array, $field, $value)
     {
         $count = 0;
@@ -1923,22 +1677,6 @@ if (!function_exists('array_count_value')) {
 }
 
 if (!function_exists('array_sum_by')) {
-    /**
-     * 按指定字段分组求和
-     * 
-     * @param array $array 数据数组
-     * @param string $groupField 分组字段
-     * @param string $sumField 求和字段
-     * @return array
-     * @example
-     * $orders = [
-     *   ['user_id' => 1, 'amount' => 100],
-     *   ['user_id' => 2, 'amount' => 200],
-     *   ['user_id' => 1, 'amount' => 50],
-     * ];
-     * array_sum_by($orders, 'user_id', 'amount');
-     * // [1 => 150, 2 => 200]
-     */
     function array_sum_by($array, $groupField, $sumField)
     {
         $result = [];
@@ -1955,22 +1693,6 @@ if (!function_exists('array_sum_by')) {
 }
 
 if (!function_exists('array_avg_by')) {
-    /**
-     * 按指定字段分组求平均值
-     * 
-     * @param array $array 数据数组
-     * @param string $groupField 分组字段
-     * @param string $avgField 求平均字段
-     * @return array
-     * @example
-     * $scores = [
-     *   ['class' => 'A', 'score' => 80],
-     *   ['class' => 'B', 'score' => 90],
-     *   ['class' => 'A', 'score' => 100],
-     * ];
-     * array_avg_by($scores, 'class', 'score');
-     * // ['A' => 90, 'B' => 90]
-     */
     function array_avg_by($array, $groupField, $avgField)
     {
         $sum = [];
@@ -1994,14 +1716,6 @@ if (!function_exists('array_avg_by')) {
 }
 
 if (!function_exists('array_max_by')) {
-    /**
-     * 按指定字段分组求最大值
-     * 
-     * @param array $array 数据数组
-     * @param string $groupField 分组字段
-     * @param string $maxField 求最大字段
-     * @return array
-     */
     function array_max_by($array, $groupField, $maxField)
     {
         $result = [];
@@ -2017,14 +1731,6 @@ if (!function_exists('array_max_by')) {
 }
 
 if (!function_exists('array_min_by')) {
-    /**
-     * 按指定字段分组求最小值
-     * 
-     * @param array $array 数据数组
-     * @param string $groupField 分组字段
-     * @param string $minField 求最小字段
-     * @return array
-     */
     function array_min_by($array, $groupField, $minField)
     {
         $result = [];
@@ -2040,16 +1746,6 @@ if (!function_exists('array_min_by')) {
 }
 
 if (!function_exists('array_total')) {
-    /**
-     * 获取数组中指定字段的累计总和
-     * 
-     * @param array $array 数据数组
-     * @param string $field 累计字段
-     * @return float
-     * @example
-     * $orders = [['amount' => 100], ['amount' => 200], ['amount' => 50]];
-     * array_total($orders, 'amount'); // 350
-     */
     function array_total($array, $field)
     {
         $total = 0;
@@ -2061,7 +1757,7 @@ if (!function_exists('array_total')) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 21. 集合操作
+// 19. 集合操作
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('collect')) {
@@ -2078,19 +1774,12 @@ if (!function_exists('collect')) {
         return new \Long\Collection($items);
     }
 }
+
 // ═══════════════════════════════════════════════════════════════════════
-// 22. 字符串扩展
+// 20. 字符串扩展
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('str_before')) {
-    /**
-     * 获取指定字符前的部分
-     * 
-     * @param string $subject 原字符串
-     * @param string $search 搜索字符
-     * @return string
-     * @example str_before('user@example.com', '@'); // 'user'
-     */
     function str_before($subject, $search)
     {
         $pos = strpos($subject, $search);
@@ -2102,14 +1791,6 @@ if (!function_exists('str_before')) {
 }
 
 if (!function_exists('str_after')) {
-    /**
-     * 获取指定字符后的部分
-     * 
-     * @param string $subject 原字符串
-     * @param string $search 搜索字符
-     * @return string
-     * @example str_after('user@example.com', '@'); // 'example.com'
-     */
     function str_after($subject, $search)
     {
         $pos = strpos($subject, $search);
@@ -2121,15 +1802,6 @@ if (!function_exists('str_after')) {
 }
 
 if (!function_exists('str_snake')) {
-    /**
-     * 驼峰转下划线（Snake Case）
-     * 
-     * @param string $value 原字符串
-     * @param string $delimiter 分隔符
-     * @return string
-     * @example str_snake('UserModel'); // 'user_model'
-     * @example str_snake('userProfile'); // 'user_profile'
-     */
     function str_snake($value, $delimiter = '_')
     {
         if (!ctype_lower($value)) {
@@ -2142,15 +1814,6 @@ if (!function_exists('str_snake')) {
 }
 
 if (!function_exists('str_camel')) {
-    /**
-     * 下划线转驼峰（Camel Case）
-     * 
-     * @param string $value 原字符串
-     * @param bool $ucfirst 是否首字母大写
-     * @return string
-     * @example str_camel('user_model'); // 'UserModel'
-     * @example str_camel('user_model', false); // 'userModel'
-     */
     function str_camel($value, $ucfirst = true)
     {
         $value = str_replace('_', ' ', $value);
@@ -2162,21 +1825,12 @@ if (!function_exists('str_camel')) {
         return $value;
     }
 }
+
 // ═══════════════════════════════════════════════════════════════════════
-// 24. 时间扩展
+// 21. 时间扩展
 // ═══════════════════════════════════════════════════════════════════════
 
 if (!function_exists('time_ago')) {
-    /**
-     * 获取相对时间（如：3分钟前）
-     * 
-     * @param int $timestamp 时间戳
-     * @param bool $short 是否短格式
-     * @return string
-     * @example time_ago(time() - 180); // '3分钟前'
-     * @example time_ago(time() - 7200); // '2小时前'
-     * @example time_ago(time() - 30, true); // '30秒前'
-     */
     function time_ago($timestamp, $short = false)
     {
         $diff = time() - $timestamp;
@@ -2215,12 +1869,6 @@ if (!function_exists('time_ago')) {
 }
 
 if (!function_exists('today_start')) {
-    /**
-     * 获取今天开始时间戳（00:00:00）
-     * 
-     * @return int
-     * @example today_start(); // 今天00:00:00的时间戳
-     */
     function today_start()
     {
         return strtotime(date('Y-m-d 00:00:00'));
@@ -2228,12 +1876,6 @@ if (!function_exists('today_start')) {
 }
 
 if (!function_exists('today_end')) {
-    /**
-     * 获取今天结束时间戳（23:59:59）
-     * 
-     * @return int
-     * @example today_end(); // 今天23:59:59的时间戳
-     */
     function today_end()
     {
         return strtotime(date('Y-m-d 23:59:59'));
@@ -2241,18 +1883,254 @@ if (!function_exists('today_end')) {
 }
 
 if (!function_exists('days_between')) {
-    /**
-     * 计算两个日期之间的天数
-     * 
-     * @param string $date1 日期1（Y-m-d）
-     * @param string $date2 日期2（Y-m-d）
-     * @return int
-     * @example days_between('2026-01-01', '2026-01-10'); // 9
-     */
     function days_between($date1, $date2)
     {
         $time1 = strtotime($date1);
         $time2 = strtotime($date2);
         return abs(($time2 - $time1) / 86400);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 22. Session 快捷操作
+// ═══════════════════════════════════════════════════════════════════════
+
+if (!function_exists('session')) {
+    /**
+     * Session 快捷操作（设置/获取/删除）
+     * 
+     * @param string|null $key Session 键名
+     * @param mixed $value 值（不传则获取，传入则设置，传 null 则删除）
+     * @return mixed
+     * @example
+     * session('user_id', 123);          // 设置
+     * $id = session('user_id');         // 获取
+     * session('user_id', null);         // 删除
+     * session()->all();                 // 获取所有
+     */
+    function session($key = null, $value = null)
+    {
+        if ($key === null) {
+            return \Long\Session::getInstance();
+        }
+        
+        if ($value === null && func_num_args() === 2) {
+            \Long\Session::delete($key);
+            return null;
+        }
+        
+        if (func_num_args() === 2) {
+            \Long\Session::set($key, $value);
+            return $value;
+        }
+        
+        return \Long\Session::get($key);
+    }
+}
+
+if (!function_exists('session_has')) {
+    function session_has($key)
+    {
+        return \Long\Session::has($key);
+    }
+}
+
+if (!function_exists('session_delete')) {
+    function session_delete($key)
+    {
+        \Long\Session::delete($key);
+    }
+}
+
+if (!function_exists('session_clear')) {
+    function session_clear()
+    {
+        \Long\Session::clear();
+    }
+}
+
+if (!function_exists('session_destroy')) {
+    function session_destroy()
+    {
+        \Long\Session::destroy();
+    }
+}
+
+if (!function_exists('flash')) {
+    function flash($key, $value = null)
+    {
+        if ($value === null) {
+            return \Long\Session::getFlash($key);
+        }
+        \Long\Session::flash($key, $value);
+        return $value;
+    }
+}
+
+if (!function_exists('flash_has')) {
+    function flash_has($key)
+    {
+        return \Long\Session::hasFlash($key);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 23. 控制器信息
+// ═══════════════════════════════════════════════════════════════════════
+
+if (!function_exists('action')) {
+    function action($full = false)
+    {
+        return request()->action($full);
+    }
+}
+
+if (!function_exists('controller')) {
+    function controller($full = false)
+    {
+        return request()->controller($full);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 24. 过滤函数
+// ═══════════════════════════════════════════════════════════════════════
+
+if (!function_exists('filterSymbolsKeepDate')) {
+    /**
+     * 过滤符号和空格，但保留中文、英文、数字、日期分隔符(- / .)
+     */
+    function filterSymbolsKeepDate($str)
+    {
+        $str = preg_replace('/\s+/u', '', $str);
+        $str = preg_replace('/[^\p{Han}A-Za-z0-9\-\/\.]/u', '', $str);
+        return $str;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 25. Token 认证
+// ═══════════════════════════════════════════════════════════════════════
+
+if (!function_exists('token')) {
+    /**
+     * 获取 Token 服务实例（单例）
+     * 
+     * @return Token
+     */
+    function token(): Token
+    {
+        static $instance = null;
+        if ($instance === null) {
+            $instance = new Token();
+        }
+        return $instance;
+    }
+}
+
+if (!function_exists('set_token')) {
+    /**
+     * 生成 Token 对（Access + Refresh）
+     * 
+     * @param array $data 用户数据
+     * @return array ['access_token' => string, 'refresh_token' => string, 'expires_in' => int, 'token_type' => string]
+     * @example
+     * $token = set_token(['user_id' => 1, 'username' => 'admin']);
+     * // 返回: ['access_token' => 'xxx', 'refresh_token' => 'xxx', 'expires_in' => 3600, 'token_type' => 'Bearer']
+     */
+    function set_token(array $data): array
+    {
+        return token()->generatePair($data);
+    }
+}
+
+if (!function_exists('verify_token')) {
+    /**
+     * 验证 Token
+     * 
+     * @param string $token JWT Token
+     * @return array ['success' => bool, 'data' => array|null, 'error' => string|null]
+     * @example
+     * $result = verify_token($token);
+     * if ($result['success']) {
+     *     echo '用户ID: ' . $result['data']['user_id'];
+     * } else {
+     *     echo '验证失败: ' . $result['error'];
+     * }
+     */
+    function verify_token(string $token): array
+    {
+        return token()->verify($token);
+    }
+}
+
+if (!function_exists('refresh_token')) {
+    /**
+     * 刷新 Token
+     * 
+     * @param string $refreshToken Refresh Token
+     * @return array ['access_token' => string, 'refresh_token' => string, 'expires_in' => int]
+     * @throws \Exception
+     * @example
+     * try {
+     *     $newPair = refresh_token($refreshToken);
+     * } catch (\Exception $e) {
+     *     echo '刷新失败: ' . $e->getMessage();
+     * }
+     */
+    function refresh_token(string $refreshToken): array
+    {
+        return token()->refresh($refreshToken);
+    }
+}
+
+if (!function_exists('header_token')) {
+    /**
+     * 从请求头中提取 Token（支持 Authorization: Bearer <token>）
+     * 
+     * @param string|null $headerName 请求头名称，默认 Authorization
+     * @return string|null
+     * @example
+     * $token = header_token();
+     * // 或自定义请求头
+     * $token = header_token('X-Auth-Token');
+     */
+    function header_token(?string $headerName = null): ?string
+    {
+        return token()->extractFromRequest($headerName);
+    }
+}
+
+if (!function_exists('token_user')) {
+    /**
+     * 获取当前登录用户（从请求中提取 Token 并验证）
+     * 
+     * @return array|null
+     * @example
+     * $user = token_user();
+     * if ($user) {
+     *     echo '当前用户: ' . $user['username'];
+     * }
+     */
+    function token_user(): ?array
+    {
+        return token()->currentUser();
+    }
+}
+
+if (!function_exists('token_user_id')) {
+    /**
+     * 获取当前登录用户ID
+     * 
+     * @return int|null
+     * @example
+     * $userId = token_user_id();
+     * if ($userId) {
+     *     // 使用 userId 查询数据
+     * }
+     */
+    function token_user_id(): ?int
+    {
+        return token()->currentUserId();
     }
 }
