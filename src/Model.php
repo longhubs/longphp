@@ -471,8 +471,15 @@ class Model
         try {
             $instance = new static();
             $timestamp = date('Y-m-d H:i:s');
+            $insertDataList = [];
 
-            foreach ($dataList as &$data) {
+            // 先准备好所有数据，不直接用引用
+            foreach ($dataList as $data) {
+                // 移除主键
+                if (isset($data[$instance->pk])) {
+                    unset($data[$instance->pk]);
+                }
+
                 if ($instance->autoWriteTimestamp) {
                     if ($instance->createTime && !isset($data[$instance->createTime])) {
                         $data[$instance->createTime] = $timestamp;
@@ -484,10 +491,12 @@ class Model
                 if ($instance->deleteTime !== false && !isset($data[$instance->deleteTime])) {
                     $data[$instance->deleteTime] = $instance->defaultSoftDelete;
                 }
+
+                $insertDataList[] = $data;
             }
 
             $results = [];
-            foreach ($dataList as $data) {
+            foreach ($insertDataList as $data) {
                 $id = Db::table($instance->table)->insert($data);
                 if ($id) {
                     $data[$instance->pk] = $id;
