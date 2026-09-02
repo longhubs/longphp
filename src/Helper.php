@@ -2134,3 +2134,288 @@ if (!function_exists('token_user_id')) {
         return token()->currentUserId();
     }
 }
+// ============================================================
+// Redis 辅助方法
+// ============================================================
+
+if (!function_exists('redis')) {
+    /**
+     * 获取 Redis 实例
+     * @return \Redis|null
+     */
+    function redis()
+    {
+        try {
+            $cache = \Long\Cache\CacheManager::getInstance();
+            $driver = $cache->getDriver();
+            if (method_exists($driver, 'getRedis')) {
+                return $driver->getRedis();
+            }
+            return null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+}
+
+if (!function_exists('redis_set')) {
+    /**
+     * 设置缓存
+     * @param string $key
+     * @param mixed $value
+     * @param int $ttl 秒
+     * @return bool
+     */
+    function redis_set($key, $value, $ttl = 0)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        $data = json_encode($value, JSON_UNESCAPED_UNICODE);
+        if ($ttl > 0) {
+            return $redis->setex($key, $ttl, $data);
+        }
+        return $redis->set($key, $data);
+    }
+}
+
+if (!function_exists('redis_get')) {
+    /**
+     * 获取缓存
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
+    function redis_get($key, $default = null)
+    {
+        $redis = redis();
+        if (!$redis) return $default;
+        
+        $data = $redis->get($key);
+        if ($data === false || $data === null) {
+            return $default;
+        }
+        return json_decode($data, true);
+    }
+}
+
+if (!function_exists('redis_delete')) {
+    /**
+     * 删除缓存
+     * @param string $key
+     * @return bool
+     */
+    function redis_delete($key)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->del($key) > 0;
+    }
+}
+
+if (!function_exists('redis_has')) {
+    /**
+     * 检查键是否存在
+     * @param string $key
+     * @return bool
+     */
+    function redis_has($key)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->exists($key) > 0;
+    }
+}
+
+if (!function_exists('redis_expire')) {
+    /**
+     * 设置过期时间
+     * @param string $key
+     * @param int $ttl 秒
+     * @return bool
+     */
+    function redis_expire($key, $ttl)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->expire($key, $ttl);
+    }
+}
+
+if (!function_exists('redis_ttl')) {
+    /**
+     * 获取剩余时间
+     * @param string $key
+     * @return int
+     */
+    function redis_ttl($key)
+    {
+        $redis = redis();
+        if (!$redis) return -2;
+        
+        return $redis->ttl($key);
+    }
+}
+
+if (!function_exists('redis_incr')) {
+    /**
+     * 自增
+     * @param string $key
+     * @param int $step
+     * @return int|false
+     */
+    function redis_incr($key, $step = 1)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->incrBy($key, $step);
+    }
+}
+
+if (!function_exists('redis_decr')) {
+    /**
+     * 自减
+     * @param string $key
+     * @param int $step
+     * @return int|false
+     */
+    function redis_decr($key, $step = 1)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->decrBy($key, $step);
+    }
+}
+
+if (!function_exists('redis_keys')) {
+    /**
+     * 获取所有匹配的键
+     * @param string $pattern
+     * @return array
+     */
+    function redis_keys($pattern = '*')
+    {
+        $redis = redis();
+        if (!$redis) return [];
+        
+        return $redis->keys($pattern);
+    }
+}
+
+if (!function_exists('redis_clear')) {
+    /**
+     * 清空当前数据库
+     * @return bool
+     */
+    function redis_clear()
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->flushDB();
+    }
+}
+
+// ============================================================
+// 队列辅助方法
+// ============================================================
+
+if (!function_exists('queue_push')) {
+    /**
+     * 入队
+     * @param string $queue 队列名
+     * @param mixed $data 数据
+     * @return int|false
+     */
+    function queue_push($queue, $data)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        $data = json_encode($data, JSON_UNESCAPED_UNICODE);
+        return $redis->rPush($queue, $data);
+    }
+}
+
+if (!function_exists('queue_pop')) {
+    /**
+     * 出队
+     * @param string $queue 队列名
+     * @param int $timeout 阻塞超时（秒）
+     * @return mixed|null
+     */
+    function queue_pop($queue, $timeout = 0)
+    {
+        $redis = redis();
+        if (!$redis) return null;
+        
+        if ($timeout > 0) {
+            $result = $redis->blPop($queue, $timeout);
+            if ($result) {
+                return json_decode($result[1], true);
+            }
+            return null;
+        }
+        
+        $data = $redis->lPop($queue);
+        if ($data === false || $data === null) {
+            return null;
+        }
+        return json_decode($data, true);
+    }
+}
+
+if (!function_exists('queue_length')) {
+    /**
+     * 获取队列长度
+     * @param string $queue 队列名
+     * @return int
+     */
+    function queue_length($queue)
+    {
+        $redis = redis();
+        if (!$redis) return 0;
+        
+        return $redis->lLen($queue);
+    }
+}
+
+if (!function_exists('queue_clear')) {
+    /**
+     * 清空队列
+     * @param string $queue 队列名
+     * @return bool
+     */
+    function queue_clear($queue)
+    {
+        $redis = redis();
+        if (!$redis) return false;
+        
+        return $redis->del($queue) > 0;
+    }
+}
+
+if (!function_exists('queue_list')) {
+    /**
+     * 查看队列内容（不弹出）
+     * @param string $queue 队列名
+     * @param int $start
+     * @param int $end
+     * @return array
+     */
+    function queue_list($queue, $start = 0, $end = -1)
+    {
+        $redis = redis();
+        if (!$redis) return [];
+        
+        $items = $redis->lRange($queue, $start, $end);
+        return array_map(function($item) {
+            return json_decode($item, true);
+        }, $items);
+    }
+}
