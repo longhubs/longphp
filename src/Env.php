@@ -19,9 +19,8 @@ class Env
      */
     public static function load($path = null)
     {
-        if ($path === null) {
-            $path = ROOT_PATH . '/.env';
-        }
+        $app = App::getInstance();
+        $path = $app->getEnvPath();
 
         if (!file_exists($path)) {
             return;

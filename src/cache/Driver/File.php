@@ -4,6 +4,7 @@
 namespace Long\Cache\Driver;
 
 use Long\Cache\DriverInterface;
+use Long\App;  // ⬅️ 添加这个引用
 
 class File implements DriverInterface
 {
@@ -14,8 +15,20 @@ class File implements DriverInterface
     public function __construct($config = [])
     {
         $this->prefix = $config['prefix'] ?? 'cache_';
-        $this->cachePath = $config['path'] ?? ROOT_PATH . '/storage/cache/data/';
-
+        
+        // ✅ 替换方案：使用 App 实例获取路径
+        $app = App::getInstance();
+        
+        // 方案一：使用框架的 getStoragePath() 方法（推荐）
+        $this->cachePath = $config['path'] ?? $app->getStoragePath('cache/data/');
+        
+        // 方案二：使用 getBasePath() 手动拼接（备选）
+        // $this->cachePath = $config['path'] ?? $app->getBasePath('storage/cache/data/');
+        
+        // 方案三：兼容旧代码，如果配置中有 path 就用配置的
+        // $this->cachePath = $config['path'] ?? $app->getStoragePath() . '/cache/data/';
+        
+        // 确保目录存在
         if (!is_dir($this->cachePath)) {
             mkdir($this->cachePath, 0755, true);
         }

@@ -8,6 +8,7 @@ namespace Long;
 use PDO;
 use PDOException;
 use Long\Cache\CacheManager;
+use Long\App;
 
 class Db
 {
@@ -133,6 +134,12 @@ class Db
      */
     private $prefix = '';
     
+    /**
+     * App 实例
+     * @var App
+     */
+    private $app;  // ⬅️ 添加 App 实例
+
     // ─────────────────────────────────────────────────────────────
     // 构造函数和连接
     // ─────────────────────────────────────────────────────────────
@@ -144,7 +151,14 @@ class Db
      */
     public function __construct($config = [])
     {
-        $this->config = $config ?: require ROOT_PATH . '/config/database.php';
+        // ⬅️ 获取 App 实例
+        $this->app = App::getInstance();
+        
+        // ✅ 使用框架的 getConfigPath() 方法
+        $configFile = $this->app->getConfigPath('database.php');
+        $defaultConfig = file_exists($configFile) ? require $configFile : [];
+        
+        $this->config = $config ?: $defaultConfig;
         $this->prefix = $this->config['connections'][$this->config['default']]['prefix'] ?? '';
         $this->connect();
     }
@@ -178,7 +192,10 @@ class Db
     {
         $instance = new self();
         if ($name) {
-            $config = require ROOT_PATH . '/config/database.php';
+            $app = App::getInstance();
+            $configFile = $app->getConfigPath('database.php');
+            $config = file_exists($configFile) ? require $configFile : [];
+            
             if (isset($config['connections'][$name])) {
                 $instance->config['default'] = $name;
                 self::$pdo = null;

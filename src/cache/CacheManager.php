@@ -4,15 +4,24 @@
 namespace Long\Cache;
 
 use Long\Cache\Driver\File;
+use Long\App;  // ⬅️ 添加引用
 
 class CacheManager
 {
     protected static $instance;
     protected $driver;
     protected $config;
+    
+    /**
+     * @var App
+     */
+    protected $app;  // ⬅️ 添加 App 实例
 
     public function __construct($config = [])
     {
+        // ⬅️ 获取 App 实例
+        $this->app = App::getInstance();
+        
         // 加载配置
         $this->config = $config ?: $this->loadConfig();
         $this->driver = $this->createDriver();
@@ -23,7 +32,9 @@ class CacheManager
      */
     protected function loadConfig()
     {
-        $configFile = ROOT_PATH . '/config/app.php';
+        // ✅ 使用框架的 getConfigPath() 方法
+        $configFile = $this->app->getConfigPath('app.php');
+        
         if (file_exists($configFile)) {
             $config = require $configFile;
             return $config['cache'] ?? ['driver' => 'file'];

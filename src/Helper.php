@@ -7,6 +7,55 @@ use Long\Db;
 use Long\Csrf;
 use Long\Cache\CacheManager;
 use Long\Token;
+use Long\App;  // ⬅️ 添加引用
+
+// ═══════════════════════════════════════════════════════════════════════
+// 0. 路径辅助函数（内部使用）
+// ═══════════════════════════════════════════════════════════════════════
+
+if (!function_exists('_long_base_path')) {
+    /**
+     * 获取项目根目录（内部使用）
+     * @return string
+     */
+    function _long_base_path()
+    {
+        static $basePath = null;
+        
+        if ($basePath !== null) {
+            return $basePath;
+        }
+        
+        // 尝试从 App 获取
+        try {
+            $app = App::getInstance();
+            $basePath = $app->getBasePath();
+            return $basePath;
+        } catch (\Exception $e) {
+            // App 未初始化，手动检测
+        }
+        
+        // 手动检测：从当前文件所在目录向上查找
+        $currentDir = __DIR__;
+        $maxLevels = 10;
+        
+        for ($i = 0; $i < $maxLevels; $i++) {
+            if (is_dir($currentDir . '/config') || is_dir($currentDir . '/vendor')) {
+                $basePath = $currentDir;
+                return $basePath;
+            }
+            $parent = dirname($currentDir);
+            if ($parent === $currentDir) {
+                break;
+            }
+            $currentDir = $parent;
+        }
+        
+        // 回退
+        $basePath = dirname(__DIR__, 2);
+        return $basePath;
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // 1. 事件系统
@@ -141,7 +190,8 @@ if (!function_exists('logs')) {
      */
     function logs($message, $level = 'info')
     {
-        $logDir = ROOT_PATH . '/runlogs/logs/';
+        // ✅ 使用内部路径辅助函数
+        $logDir = _long_base_path() . '/runlogs/logs/';
         if (!is_dir($logDir)) {
             mkdir($logDir, 0777, true);
         }
@@ -320,7 +370,8 @@ if (!function_exists('config')) {
 
         if ($configs === null) {
             $configs = [];
-            $files = glob(ROOT_PATH . '/config/*.php');
+            // ✅ 使用内部路径辅助函数
+            $files = glob(_long_base_path() . '/config/*.php');
             foreach ($files as $file) {
                 $configs = array_merge($configs, require $file);
             }
@@ -2134,6 +2185,7 @@ if (!function_exists('token_user_id')) {
         return token()->currentUserId();
     }
 }
+
 // ============================================================
 // Redis 辅助方法
 // ============================================================

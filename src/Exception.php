@@ -3,15 +3,23 @@
 // LongPHP Framework - 统一异常处理
 
 namespace Long;
+use Long\App;  // ⬅️ 添加引用
 
 class Exception
 {
     private static $debug = false;
 
-    public static function init()
+     /**
+     * @var App
+     */
+    private static $app;  // ⬅️ 添加 App 实例
+     public static function init()
     {
+        // ⬅️ 获取 App 实例
+        self::$app = App::getInstance();
+        
         // ✅ 从配置文件读取 debug 状态
-        $configFile = ROOT_PATH . '/config/app.php';
+        $configFile = self::$app->getConfigPath('app.php');
         if (file_exists($configFile)) {
             $config = require $configFile;
             self::$debug = $config['debug'] ?? false;

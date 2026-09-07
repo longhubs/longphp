@@ -7,6 +7,7 @@ namespace Long;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Long\App;  // ⬅️ 添加引用
 
 /**
  * LongToken - JWT 认证服务
@@ -23,37 +24,42 @@ class Token
     /**
      * @var string 自定义密钥
      */
-    protected string $secretKey;
+    protected $secretKey;
 
     /**
      * @var string 加密算法
      */
-    protected string $algorithm = 'HS256';
+    protected $algorithm = 'HS256';
 
     /**
      * @var int Access Token 有效期（秒）
      */
-    protected int $accessTtl;
+    protected $accessTtl;
 
     /**
      * @var int Refresh Token 有效期（秒）
      */
-    protected int $refreshTtl;
+    protected $refreshTtl;
 
     /**
      * @var string 签发者
      */
-    protected string $issuer;
+    protected $issuer;
 
     /**
      * @var string Token 类型标识
      */
-    protected string $tokenType = 'Bearer';
+    protected $tokenType = 'Bearer';
 
     /**
      * @var array 配置信息
      */
-    protected array $config = [];
+    protected $config = [];
+
+    /**
+     * @var App App 实例
+     */
+    protected $app;  // ⬅️ 添加 App 实例
 
     /**
      * 构造函数
@@ -63,6 +69,9 @@ class Token
      */
     public function __construct(array $config = [])
     {
+        // ⬅️ 获取 App 实例
+        $this->app = App::getInstance();
+        
         // 加载配置
         $this->config = $config ?: $this->loadConfig();
         $this->initFromConfig();
@@ -73,7 +82,12 @@ class Token
      */
     protected function loadConfig(): array
     {
-        $config = require ROOT_PATH . '/config/app.php';
+        // ✅ 使用框架的 getConfigPath() 方法
+        $configFile = $this->app->getConfigPath('app.php');
+        if (!file_exists($configFile)) {
+            return [];
+        }
+        $config = require $configFile;
         return $config['token'] ?? [];
     }
 

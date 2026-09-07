@@ -6,6 +6,7 @@
 namespace Long;
 
 use Long\View;
+use Long\App;  // ⬅️ 添加引用
 
 class Controller
 {
@@ -20,14 +21,26 @@ class Controller
      * @var array
      */
     protected $codes = [];
+    
+    /**
+     * App 实例
+     * @var App
+     */
+    protected $app;  // ⬅️ 添加 App 实例
 
     /**
      * 构造函数
      */
     public function __construct()
     {
+        // ⬅️ 获取 App 实例
+        $this->app = App::getInstance();
+        
         $this->request = new Request();
-        $this->codes = require ROOT_PATH . '/config/response.php';
+        
+        // ✅ 使用框架的 getConfigPath() 方法
+        $configFile = $this->app->getConfigPath('response.php');
+        $this->codes = file_exists($configFile) ? require $configFile : [];
 
         // ✅ 自动调用 initialize()（如果子类定义了该方法）
         if (method_exists($this, 'initialize')) {
@@ -50,11 +63,13 @@ class Controller
     {
         return View::render($view, $data, $engine);
     }
+    
     protected function assign($name, $value = null)
     {
         View::assign($name, $value);
         return $this;
     }
+    
     // ─────────────────────────────────────────────────────────────
     // JSON 响应
     // ─────────────────────────────────────────────────────────────

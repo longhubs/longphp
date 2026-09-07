@@ -29,7 +29,16 @@ class App
      * 项目根目录路径
      * @var string
      */
-    protected $rootPath;
+    protected $basePath;
+
+    /**
+     * 自定义路径
+     */
+    protected $appPath;
+    protected $configPath;
+    protected $storagePath;
+    protected $runtimePath;
+    protected $publicPath;
 
     /**
      * 单例实例
@@ -43,44 +52,198 @@ class App
      */
     protected $middleware = [];
 
+    /**
+     * 是否已加载 Helper
+     */
+    protected $helperLoaded = false;
+
     // ─────────────────────────────────────────────────────────────
     // 构造函数
     // ─────────────────────────────────────────────────────────────
 
-    /**
-     * 构造函数：初始化应用
-     * 加载环境变量、系统函数、配置、中间件、服务、异常处理、路由
-     */
     public function __construct()
     {
-        // 加载 .env 环境变量
-        Env::load();
-        
-        // 加载系统辅助函数
-        $this->loadHelper();
-        
-        // 设置项目根目录
-        $this->rootPath = ROOT_PATH;
+        $basePath =  dirname(__DIR__,4);
         self::$instance = $this;
-        
-        // 加载配置文件
+    
+        // 设置根目录（关键步骤）
+        $this->setBasePath($basePath);
+
+        // 2. 加载 .env 环境变量
+        Env::load();
+
+        // 3. 加载系统辅助函数
+        $this->loadHelper();
+
+        // 4. 加载配置文件
         $this->config = $this->loadConfig();
-        
-        // 加载中间件配置
+
+        // 5. 加载中间件配置
         $this->loadMiddlewareConfig();
-        
-        // 注册服务
+
+        // 6. 注册服务
         $this->registerServices();
-        
-        // 加载事件配置
+
+        // 7. 加载事件配置
         $this->loadEventConfig();
-        
-        // 初始化异常处理
+
+        // 8. 初始化异常处理
         $this->initException();
-        
-        // 初始化路由
+
+        // 9. 初始化路由
         $this->route = new Route();
         $this->loadRoutes();
+    }
+
+    // ============================================================
+    // 路径管理
+    // ============================================================
+
+    /**
+     * 设置根目录
+     */
+    public function setBasePath($path)
+    {
+        $this->basePath = rtrim($path, '/\\');
+        return $this;
+    }
+
+    /**
+     * 设置应用目录
+     */
+    public function setAppPath($path)
+    {
+        $this->appPath = rtrim($path, '/\\');
+        return $this;
+    }
+
+    /**
+     * 设置配置目录
+     */
+    public function setConfigPath($path)
+    {
+        $this->configPath = rtrim($path, '/\\');
+        return $this;
+    }
+
+    /**
+     * 设置存储目录
+     */
+    public function setStoragePath($path)
+    {
+        $this->storagePath = rtrim($path, '/\\');
+        return $this;
+    }
+
+    /**
+     * 设置运行日志目录
+     */
+    public function setRuntimePath($path)
+    {
+        $this->runtimePath = rtrim($path, '/\\');
+        return $this;
+    }
+
+    /**
+     * 设置公共目录
+     */
+    public function setPublicPath($path)
+    {
+        $this->publicPath = rtrim($path, '/\\');
+        return $this;
+    }
+
+    /**
+     * 获取根目录
+     */
+    public function getBasePath($path = '')
+    {
+        return $this->basePath . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
+     * 获取应用目录
+     */
+    public function getAppPath($path = '')
+    {
+        $dir = $this->appPath ?: $this->basePath . DIRECTORY_SEPARATOR . 'app';
+        return $dir . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
+     * 获取配置目录
+     */
+    public function getConfigPath($path = '')
+    {
+        $dir = $this->configPath ?: $this->basePath . DIRECTORY_SEPARATOR . 'config';
+        return $dir . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
+     * 获取存储目录
+     */
+    public function getStoragePath($path = '')
+    {
+        $dir = $this->storagePath ?: $this->basePath . DIRECTORY_SEPARATOR . 'storage';
+        return $dir . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
+     * 获取运行日志目录
+     */
+    public function getRuntimePath($path = '')
+    {
+        $dir = $this->runtimePath ?: $this->basePath . DIRECTORY_SEPARATOR . 'runlogs';
+        return $dir . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
+     * 获取公共目录
+     */
+    public function getPublicPath($path = '')
+    {
+        $dir = $this->publicPath ?: $this->basePath . DIRECTORY_SEPARATOR . 'public';
+        return $dir . ($path ? DIRECTORY_SEPARATOR . $path : '');
+    }
+
+    /**
+     * 获取 .env 文件路径
+     */
+    public function getEnvPath()
+    {
+        return $this->basePath . DIRECTORY_SEPARATOR . '.env';
+    }
+
+    /**
+     * 确保目录存在
+     */
+    public function ensureDirectory($path)
+    {
+        if (!is_dir($path)) {
+            @mkdir($path, 0755, true);
+        }
+        return $path;
+    }
+
+    /**
+     * 确保常用目录存在
+     */
+    public function ensureDirectories()
+    {
+        $this->ensureDirectory($this->getRuntimePath());
+        $this->ensureDirectory($this->getRuntimePath('logs'));
+        $this->ensureDirectory($this->getRuntimePath('cache'));
+        $this->ensureDirectory($this->getStoragePath());
+        return $this;
+    }
+
+    /**
+     * 获取根目录（兼容旧代码）
+     * @deprecated 使用 getBasePath()
+     */
+    public function getRootPath()
+    {
+        return $this->basePath;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -92,7 +255,14 @@ class App
      */
     protected function loadHelper()
     {
-        require_once __DIR__ . '/Helper.php';
+        if ($this->helperLoaded) {
+            return;
+        }
+        $helperPath = __DIR__ . '/Helper.php';
+        if (file_exists($helperPath)) {
+            require_once $helperPath;
+            $this->helperLoaded = true;
+        }
     }
 
     /**
@@ -101,7 +271,7 @@ class App
      */
     protected function loadConfig()
     {
-        $configFile = ROOT_PATH . '/config/app.php';
+        $configFile = $this->getConfigPath('app.php');
         return file_exists($configFile) ? require $configFile : [];
     }
 
@@ -110,7 +280,7 @@ class App
      */
     protected function loadMiddlewareConfig()
     {
-        $middlewareFile = ROOT_PATH . '/config/middleware.php';
+        $middlewareFile = $this->getConfigPath('middleware.php');
         if (file_exists($middlewareFile)) {
             $this->middleware = require $middlewareFile;
         }
@@ -121,7 +291,7 @@ class App
      */
     protected function loadEventConfig()
     {
-        $eventFile = ROOT_PATH . '/config/event.php';
+        $eventFile = $this->getConfigPath('event.php');
         if (file_exists($eventFile)) {
             $config = require $eventFile;
             $listeners = $config['listeners'] ?? [];
@@ -140,9 +310,11 @@ class App
      */
     protected function loadRoutes()
     {
-        $routeDir = ROOT_PATH . '/route/';
-        $files = glob($routeDir . '*.php');
-        
+        $routeDir = $this->basePath . DIRECTORY_SEPARATOR . 'route';
+        if (!is_dir($routeDir)) {
+            return;
+        }
+        $files = glob($routeDir . DIRECTORY_SEPARATOR . '*.php');
         foreach ($files as $file) {
             $route = $this->route;
             require $file;
@@ -155,13 +327,15 @@ class App
 
     /**
      * 注册服务到容器
-     * 包括默认服务和用户自定义服务
      */
     protected function registerServices()
     {
         $container = Container::getInstance();
         
-        // 注册默认服务
+        $container->singleton('app', function() {
+            return $this;
+        });
+        
         $container->singleton('config', function() {
             return $this->config;
         });
@@ -171,21 +345,16 @@ class App
         });
         
         // 加载用户自定义服务配置
-        $providerFile = ROOT_PATH . '/config/provider.php';
+        $providerFile = $this->getConfigPath('provider.php');
         if (file_exists($providerFile)) {
             $services = require $providerFile;
 
-            // 接口绑定
             foreach ($services['binds'] ?? [] as $abstract => $concrete) {
                 $container->bind($abstract, $concrete);
             }
-            
-            // 单例绑定
             foreach ($services['singletons'] ?? [] as $abstract => $concrete) {
                 $container->singleton($abstract, $concrete);
             }
-            
-            // 别名绑定
             foreach ($services['aliases'] ?? [] as $alias => $abstract) {
                 $container->alias($alias, $abstract);
             }
@@ -193,37 +362,30 @@ class App
     }
 
     /**
-     * 加载用户服务绑定（延迟加载，在控制器执行前调用）
+     * 加载用户服务绑定（延迟加载）
      */
     protected function loadProviderBindings()
     {
         static $loaded = false;
-        
         if ($loaded) {
             return;
         }
         
-        $providerFile = ROOT_PATH . '/config/provider.php';
+        $providerFile = $this->getConfigPath('provider.php');
         if (file_exists($providerFile)) {
             $services = require $providerFile;
             $container = Container::getInstance();
             
-            // 接口绑定
             foreach ($services['binds'] ?? [] as $abstract => $concrete) {
                 $container->bind($abstract, $concrete);
             }
-            
-            // 单例绑定
             foreach ($services['singletons'] ?? [] as $abstract => $concrete) {
                 $container->singleton($abstract, $concrete);
             }
-            
-            // 别名绑定
             foreach ($services['aliases'] ?? [] as $alias => $abstract) {
                 $container->alias($alias, $abstract);
             }
         }
-        
         $loaded = true;
     }
 
@@ -259,6 +421,9 @@ class App
      */
     public static function getInstance()
     {
+        if (!self::$instance) {
+            self::$instance = new self();
+        }
         return self::$instance;
     }
 
@@ -267,18 +432,9 @@ class App
     // ─────────────────────────────────────────────────────────────
 
     /**
-     * 获取项目根目录
-     * @return string
-     */
-    public function getRootPath()
-    {
-        return $this->rootPath;
-    }
-
-    /**
      * 获取配置
-     * @param string|null $key 配置键名
-     * @param mixed $default 默认值
+     * @param string|null $key
+     * @param mixed $default
      * @return mixed
      */
     public function getConfig($key = null, $default = null)
@@ -313,8 +469,6 @@ class App
 
     /**
      * 运行应用
-     * 执行路由匹配、中间件、控制器，返回响应
-     * @return Response
      */
     public function run()
     {
@@ -328,30 +482,23 @@ class App
 
         $result = $this->runWithMiddleware($routeInfo);
         
-        // 统一返回 Response 对象
         if ($result instanceof Response) {
             return $result;
         }
-        
         if (is_string($result)) {
             return new Response($result, 200);
         }
-        
         if ($result === null) {
             return new Response('', 200);
         }
-        
         return new Response('', 200);
     }
 
     /**
      * 执行中间件链
-     * @param array $routeInfo 路由信息
-     * @return mixed
      */
     protected function runWithMiddleware($routeInfo)
     {
-        // 合并全局中间件和路由中间件
         $global = $this->middleware['global'] ?? [];
         $routeMiddlewares = $routeInfo['middleware'] ?? [];
         $middlewares = array_merge($global, $routeMiddlewares);
@@ -362,19 +509,13 @@ class App
             return $this->execute($routeInfo);
         };
 
-        // 洋葱模型：从后往前包裹中间件
         foreach (array_reverse($middlewares) as $middlewareClass) {
             $next = function($request) use ($middlewareClass, $next) {
                 if (!class_exists($middlewareClass)) {
                     return "中间件不存在: {$middlewareClass}";
                 }
                 $middleware = new $middlewareClass();
-                $result = $middleware->handle($request, $next);
-                
-                if (is_string($result)) {
-                    return $result;
-                }
-                return $result;
+                return $middleware->handle($request, $next);
             };
         }
 
@@ -383,12 +524,9 @@ class App
 
     /**
      * 执行控制器
-     * @param array $routeInfo 路由信息
-     * @return string
      */
     protected function execute($routeInfo)
     {
-        // 闭包路由
         if (isset($routeInfo['is_closure']) && $routeInfo['is_closure']) {
             return $routeInfo['controller'](...$routeInfo['params']);
         }
@@ -397,7 +535,6 @@ class App
         $action = $routeInfo['action'];
         $params = $routeInfo['params'] ?? [];
 
-        // ✅ 设置控制器名和方法名到 Request
         $this->request->setController($controllerClass);
         $this->request->setAction($action);
 
@@ -405,23 +542,18 @@ class App
             return "控制器不存在: {$controllerClass}";
         }
 
-        // 在解析控制器之前加载用户服务绑定
         $this->loadProviderBindings();
-
-        // 使用容器解析控制器（自动注入构造函数依赖）
         $controller = app($controllerClass);
 
         if (!method_exists($controller, $action)) {
             return "方法不存在: {$action}";
         }
 
-        // 方法参数依赖注入（自动注入 Request）
         $reflection = new \ReflectionMethod($controller, $action);
         $args = [];
 
         foreach ($reflection->getParameters() as $param) {
             $type = $param->getType();
-
             if ($type && !$type->isBuiltin()) {
                 $typeName = $type->getName();
                 if ($typeName === 'Long\Request' || $typeName === 'Request') {
@@ -429,20 +561,14 @@ class App
                     continue;
                 }
             }
-
             $args[] = array_shift($params);
         }
 
         return $controller->$action(...$args);
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 应用结束
-    // ─────────────────────────────────────────────────────────────
-
     /**
-     * 结束应用（收尾工作）
-     * @param Response $response 响应对象
+     * 结束应用
      */
     public function end($response)
     {

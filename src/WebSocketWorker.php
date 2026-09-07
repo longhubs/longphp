@@ -1,9 +1,11 @@
 <?php
 // src/WebSocketWorker.php
-// LongPHP WebSocket 多进程服务 - 生产级完整版
+// LongPHP WebSocket 多进程服务 - Master-Worker 模式
 // 龙行天下 🐉
 
 namespace Long;
+
+use Long\App;
 
 class WebSocketWorker
 {
@@ -27,24 +29,43 @@ class WebSocketWorker
     protected $workers = [];
     protected $running = true;
     protected $masterPid;
+    protected $server;  // ⭐ Master 的 socket
+
+    /**
+     * @var App
+     */
+    protected $app;
+
+    /**
+     * @var string
+     */
+    protected $basePath;
 
     public function __construct($config = [])
     {
+        // 获取 App 实例
+        $this->app = App::getInstance();
+        $this->basePath = $this->app->getBasePath();
+
         $this->config = array_merge($this->config, $config);
 
-        if (defined('ROOT_PATH')) {
-            $appConfig = require ROOT_PATH . '/config/app.php';
+        // 使用框架的 getConfigPath() 方法
+        $configFile = $this->app->getConfigPath('app.php');
+        if (file_exists($configFile)) {
+            $appConfig = require $configFile;
             $wsConfig = $appConfig['websocket'] ?? [];
-            $this->config = array_merge($this->config, $wsConfig);
+            foreach ($wsConfig as $key => $value) {
+                if (!isset($config[$key])) {
+                    $this->config[$key] = $value;
+                }
+            }
         }
 
-        // 确保 PID 目录存在
+        // 确保目录存在
         $pidDir = dirname($this->config['pid_file']);
         if (!is_dir($pidDir)) {
             @mkdir($pidDir, 0777, true);
         }
-
-        // 确保日志目录存在
         $logDir = dirname($this->config['log_file']);
         if (!is_dir($logDir)) {
             @mkdir($logDir, 0777, true);
@@ -65,21 +86,45 @@ class WebSocketWorker
     // 入口方法
     // ============================================================
 
+    /**
+     * 前台启动（调试模式）
+     */
     public function start()
     {
+        $this->log("🔍 [DEBUG] start() 被调用");
+        $this->log("🔍 [DEBUG] pid_file: " . $this->config['pid_file']);
+        $this->log("🔍 [DEBUG] log_file: " . $this->config['log_file']);
+        
+        if ($this->config['pid_file']) {
+            $pidDir = dirname($this->config['pid_file']);
+            if (!is_dir($pidDir)) {
+                @mkdir($pidDir, 0777, true);
+            }
+            file_put_contents($this->config['pid_file'], getmypid());
+        }
+
         $this->masterPid = getmypid();
 
-        if ($this->isMultiProcessSupported()) {
-            $this->log("🐉 LongPHP WebSocket 多进程模式");
+        if ($this->isMultiProcessSupported() && $this->config['workers'] > 1) {
+            $this->log("🐉 LongPHP WebSocket Master-Worker 模式");
             $this->multiProcessStart();
         } else {
-            $this->log("⚠️ 当前环境不支持多进程，使用单进程模式", 'warning');
+            $this->log("⚠️ 单进程模式", 'warning');
             $this->singleProcessStart();
         }
     }
 
+    /**
+     * 后台启动（守护进程模式）
+     */
     public function startDaemon()
     {
+        $this->log("🔍 [DEBUG] startDaemon() 被调用");
+        $this->log("🔍 [DEBUG] 操作系统: " . (DIRECTORY_SEPARATOR === '\\' ? 'Windows' : 'Linux/Unix'));
+        $this->log("🔍 [DEBUG] 端口: " . $this->config['port']);
+        $this->log("🔍 [DEBUG] pid_file: " . $this->config['pid_file']);
+        $this->log("🔍 [DEBUG] log_file: " . $this->config['log_file']);
+        
         if (DIRECTORY_SEPARATOR === '\\') {
             $this->startWindowsDaemon();
         } else {
@@ -90,50 +135,65 @@ class WebSocketWorker
     public function stopDaemon()
     {
         $pidFile = $this->config['pid_file'];
-
         if (!file_exists($pidFile)) {
             $this->log("❌ 服务未运行", 'error');
             return;
         }
 
         $pid = file_get_contents($pidFile);
+        $pid = trim($pid);
 
         if (DIRECTORY_SEPARATOR === '\\') {
-            shell_exec("taskkill /F /PID {$pid} 2>nul");
-            $this->log("✅ 服务已停止（PID: {$pid}）");
+            $check = shell_exec("tasklist /FI \"PID eq {$pid}\" 2>nul");
+            if (strpos($check, $pid) !== false) {
+                shell_exec("taskkill /F /PID {$pid} 2>nul");
+                $this->log("✅ 服务已停止（PID: {$pid}）");
+            }
         } else {
-            if (posix_kill($pid, SIGTERM)) {
+            if (function_exists('posix_kill') && posix_kill($pid, 0)) {
+                posix_kill($pid, SIGTERM);
+                $wait = 0;
+                while (function_exists('posix_kill') && posix_kill($pid, 0) && $wait < 5) {
+                    sleep(1);
+                    $wait++;
+                }
+                if (function_exists('posix_kill') && posix_kill($pid, 0)) {
+                    posix_kill($pid, SIGKILL);
+                }
                 $this->log("✅ 服务已停止（PID: {$pid}）");
             } else {
-                $this->log("❌ 停止失败", 'error');
+                $this->log("❌ 服务未运行（PID: {$pid} 不存在）", 'warning');
             }
         }
-
         @unlink($pidFile);
     }
 
     public function statusDaemon()
     {
         $pidFile = $this->config['pid_file'];
-
         if (!file_exists($pidFile)) {
             $this->log("❌ 服务未运行");
             return;
         }
 
         $pid = file_get_contents($pidFile);
+        $pid = trim($pid);
 
         if (DIRECTORY_SEPARATOR === '\\') {
             $check = shell_exec("tasklist /FI \"PID eq {$pid}\" 2>nul");
             if (strpos($check, $pid) !== false) {
                 $this->log("✅ 服务运行中（PID: {$pid}）");
+                $this->log("   端口: {$this->config['port']}");
+                $this->log("   日志: {$this->config['log_file']}");
             } else {
                 $this->log("❌ 服务未运行");
                 @unlink($pidFile);
             }
         } else {
-            if (posix_kill($pid, 0)) {
+            if (function_exists('posix_kill') && posix_kill($pid, 0)) {
                 $this->log("✅ 服务运行中（PID: {$pid}）");
+                $this->log("   端口: {$this->config['port']}");
+                $this->log("   日志: {$this->config['log_file']}");
             } else {
                 $this->log("❌ 服务未运行");
                 @unlink($pidFile);
@@ -143,6 +203,7 @@ class WebSocketWorker
 
     public function restartDaemon()
     {
+        $this->log("🔄 正在重启 WebSocket 服务...");
         $this->stopDaemon();
         sleep(2);
         $this->startDaemon();
@@ -154,29 +215,64 @@ class WebSocketWorker
 
     protected function startLinuxDaemon()
     {
-        $script = ROOT_PATH . '/long';
+        // 使用框架路径
+        $script = $this->basePath . '/long';
         $logFile = $this->config['log_file'];
         $pidFile = $this->config['pid_file'];
 
+        $this->log("🔍 [DEBUG] basePath: " . $this->basePath);
+        $this->log("🔍 [DEBUG] script路径: " . $script);
+        $this->log("🔍 [DEBUG] pidFile: " . $pidFile);
+        $this->log("🔍 [DEBUG] logFile: " . $logFile);
+
+        $logDir = dirname($logFile);
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        $pidDir = dirname($pidFile);
+        if (!is_dir($pidDir)) {
+            @mkdir($pidDir, 0755, true);
+        }
+
         if (file_exists($pidFile)) {
             $pid = file_get_contents($pidFile);
-            if (posix_kill($pid, 0)) {
+            if (function_exists('posix_kill') && posix_kill($pid, 0)) {
                 $this->log("❌ 服务已在运行（PID: {$pid}）", 'error');
                 return;
             }
             @unlink($pidFile);
         }
 
-        $cmd = "nohup php {$script} ws start {$this->config['port']} >> {$logFile} 2>&1 & echo $! > {$pidFile}";
+        if (!file_exists($script)) {
+            $this->log("❌ 脚本文件不存在: " . $script, 'error');
+            return;
+        }
+
+        // ⭐ 直接后台启动
+        $cmd = "nohup php {$script} ws start {$this->config['port']} --pid {$pidFile} >> {$logFile} 2>&1 &";
+        $this->log("🔍 [DEBUG] 后台命令: " . $cmd);
         exec($cmd);
 
-        sleep(1);
+        $wait = 0;
+        while (!file_exists($pidFile) && $wait < 10) {
+            sleep(1);
+            $wait++;
+            $this->log("🔍 [DEBUG] 等待 PID 文件... ({$wait}s)");
+        }
+
         if (file_exists($pidFile)) {
             $pid = file_get_contents($pidFile);
             $this->log("✅ 守护进程已启动（PID: {$pid}）");
             $this->log("📝 日志: {$logFile}");
+            sleep(1);
+            if (function_exists('posix_kill') && posix_kill($pid, 0)) {
+                $this->log("✅ 进程验证通过");
+            }
         } else {
-            $this->log("❌ 启动失败", 'error');
+            $this->log("❌ PID 文件未生成", 'error');
+            if (file_exists($logFile)) {
+                $this->log("📌 日志内容:\n" . file_get_contents($logFile), 'error');
+            }
         }
     }
 
@@ -186,13 +282,23 @@ class WebSocketWorker
 
     protected function startWindowsDaemon()
     {
-        $script = ROOT_PATH . '\\long';
+        // 使用框架路径
+        $script = $this->basePath . '\\long';
         $logFile = str_replace('/', '\\', $this->config['log_file']);
         $pidFile = str_replace('/', '\\', $this->config['pid_file']);
 
+        $this->log("🔍 [DEBUG] basePath: " . $this->basePath);
+        $this->log("🔍 [DEBUG] script路径: " . $script);
+        $this->log("🔍 [DEBUG] pidFile: " . $pidFile);
+        $this->log("🔍 [DEBUG] logFile: " . $logFile);
+
         $logDir = dirname($logFile);
         if (!is_dir($logDir)) {
-            mkdir($logDir, 0777, true);
+            @mkdir($logDir, 0777, true);
+        }
+        $pidDir = dirname($pidFile);
+        if (!is_dir($pidDir)) {
+            @mkdir($pidDir, 0777, true);
         }
 
         if (file_exists($pidFile)) {
@@ -205,25 +311,36 @@ class WebSocketWorker
             @unlink($pidFile);
         }
 
-        $cmd = "start /B php {$script} ws start {$this->config['port']} >> {$logFile} 2>&1";
+        if (!file_exists($script)) {
+            $this->log("❌ 脚本文件不存在: " . $script, 'error');
+            return;
+        }
+
+        $cmd = 'start /B php "' . $script . '" ws start ' . $this->config['port'] . ' --pid "' . $pidFile . '" > "' . $logFile . '" 2>&1';
+        $this->log("🔍 [DEBUG] 后台命令: " . $cmd);
         pclose(popen($cmd, 'r'));
 
-        sleep(2);
+        $wait = 0;
+        while (!file_exists($pidFile) && $wait < 10) {
+            sleep(1);
+            $wait++;
+            $this->log("🔍 [DEBUG] 等待 PID 文件... ({$wait}s)");
+        }
 
-        $pid = shell_exec("wmic process where \"commandline like '%long ws start {$this->config['port']}%'\" get processid 2>nul | findstr /v ProcessId | findstr /r \"[0-9]\"");
-        $pid = trim($pid);
-
-        if ($pid) {
-            file_put_contents($pidFile, $pid);
+        if (file_exists($pidFile)) {
+            $pid = file_get_contents($pidFile);
             $this->log("✅ 守护进程已启动（PID: {$pid}）");
             $this->log("📝 日志: {$logFile}");
         } else {
-            $this->log("❌ 启动失败，请检查日志: {$logFile}", 'error');
+            $this->log("❌ PID 文件未生成", 'error');
+            if (file_exists($logFile)) {
+                $this->log("📌 日志内容:\n" . file_get_contents($logFile), 'error');
+            }
         }
     }
 
     // ============================================================
-    // 多进程模式（Linux）
+    // Master-Worker 多进程模式（Linux）
     // ============================================================
 
     protected function multiProcessStart()
@@ -232,15 +349,45 @@ class WebSocketWorker
         $this->log("进程数: {$this->config['workers']}");
         $this->log("──────────────────────────────────────────");
 
+        // ⭐ 1. Master 创建 socket，绑定端口
+        $this->server = $this->createServer();
+        if (!$this->server) {
+            return;
+        }
+
         // 安装信号
         pcntl_signal(SIGINT, [$this, 'shutdown']);
         pcntl_signal(SIGTERM, [$this, 'shutdown']);
 
+        // ⭐ 2. 启动 Worker 子进程
         for ($i = 0; $i < $this->config['workers']; $i++) {
             $this->startWorker($i);
         }
 
+        // ⭐ 3. Master 监控子进程
         $this->monitor();
+    }
+
+    /**
+     * Master 创建 socket
+     */
+    protected function createServer()
+    {
+        $server = @stream_socket_server(
+            "tcp://{$this->config['host']}:{$this->config['port']}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+        );
+
+        if (!$server) {
+            $this->log("❌ 启动失败: [{$errno}] {$errstr}", 'error');
+            $this->log("📌 可能原因：端口 {$this->config['port']} 已被占用", 'error');
+            return null;
+        }
+
+        stream_set_blocking($server, false);
+        return $server;
     }
 
     protected function startWorker($id)
@@ -253,12 +400,12 @@ class WebSocketWorker
         }
 
         if ($pid == 0) {
-            // 子进程
+            // ⭐ 子进程：使用 Master 的 socket
             $this->workerLoop($id);
             exit(0);
         }
 
-        // 父进程记录
+        // Master 记录子进程
         $this->workers[$pid] = [
             'id' => $id,
             'pid' => $pid,
@@ -270,89 +417,30 @@ class WebSocketWorker
 
     protected function workerLoop($id)
     {
-        cli_set_process_title("longphp-ws-{$id}");
-        $this->runServer();
-    }
-
-    protected function monitor()
-    {
-        while (true) {
-            $status = 0;
-            $pid = pcntl_wait($status, WNOHANG);
-
-            if ($pid > 0) {
-                $this->log("🔄 进程退出: PID={$pid}，重启中...", 'warning');
-                unset($this->workers[$pid]);
-                sleep(1);
-                $this->startWorker(0);
-            }
-
-            pcntl_signal_dispatch();
-            sleep(1);
+        if (function_exists('cli_set_process_title')) {
+            cli_set_process_title("longphp-ws-{$id}");
         }
-    }
-
-    public function shutdown()
-    {
-        $this->log("🛑 关闭服务...");
-        foreach ($this->workers as $pid => $info) {
-            posix_kill($pid, SIGTERM);
-        }
+        
+        // ⭐ 子进程使用 Master 的 socket 处理连接
+        $this->runWorker();
         exit(0);
     }
 
-    // ============================================================
-    // 单进程模式（Windows）
-    // ============================================================
-
-    protected function singleProcessStart()
+    /**
+     * Worker 处理连接（不绑定端口，使用 Master 的 socket）
+     */
+    protected function runWorker()
     {
-        $this->log("端口: {$this->config['port']}");
-        $this->log("──────────────────────────────────────────");
-
-        register_shutdown_function(function() {
-            $this->log("服务已关闭");
-        });
-
-        if (function_exists('pcntl_signal')) {
-            pcntl_signal(SIGINT, function() { $this->running = false; });
-            pcntl_signal(SIGTERM, function() { $this->running = false; });
-        }
-
-        $this->runServer();
-    }
-
-    // ============================================================
-    // 核心服务器（单进程/多进程共用）
-    // ============================================================
-
-    protected function runServer()
-    {
-        $server = stream_socket_server(
-            "tcp://{$this->config['host']}:{$this->config['port']}",
-            $errno,
-            $errstr,
-            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
-        );
-
-        if (!$server) {
-            $this->log("❌ 启动失败: {$errstr}", 'error');
-            return;
-        }
-
-        stream_set_blocking($server, false);
-
         $clients = [];
         $handshakes = [];
         $lastPing = [];
         $lastHeartbeat = time();
         $lastGc = time();
 
-        $this->log("✅ 服务启动成功");
-        $this->log("ws://localhost:{$this->config['port']}");
-        $this->log("按 Ctrl+C 停止\n");
+        // ⭐ 子进程使用 Master 的 socket
+        $server = $this->server;
 
-        while ($this->running) {
+        while (true) {
             $read = array_values($clients);
             $read[] = $server;
             $write = null;
@@ -451,19 +539,8 @@ class WebSocketWorker
                 gc_collect_cycles();
             }
 
-            if (function_exists('pcntl_signal_dispatch')) {
-                pcntl_signal_dispatch();
-            }
-
             usleep(10000);
         }
-
-        // 清理资源
-        foreach ($clients as $stream) {
-            @fclose($stream);
-        }
-        @fclose($server);
-        $this->log("服务已关闭");
     }
 
     protected function closeClient($fd, &$clients, &$handshakes, &$lastPing)
@@ -476,6 +553,194 @@ class WebSocketWorker
         unset($lastPing[$fd]);
         $this->log("❌ 断开: {$fd}");
         $this->onClose($fd);
+    }
+
+    protected function monitor()
+    {
+        while (true) {
+            $status = 0;
+            $pid = pcntl_wait($status, WNOHANG);
+
+            if ($pid > 0) {
+                $this->log("🔄 进程退出: PID={$pid}，重启中...", 'warning');
+                unset($this->workers[$pid]);
+                sleep(1);
+                $this->startWorker(0);
+            }
+
+            pcntl_signal_dispatch();
+            sleep(1);
+        }
+    }
+
+    public function shutdown()
+    {
+        $this->log("🛑 关闭服务...");
+        foreach ($this->workers as $pid => $info) {
+            posix_kill($pid, SIGTERM);
+        }
+        if ($this->server) {
+            @fclose($this->server);
+        }
+        if ($this->config['pid_file'] && file_exists($this->config['pid_file'])) {
+            @unlink($this->config['pid_file']);
+        }
+        exit(0);
+    }
+
+    // ============================================================
+    // 单进程模式（Windows / 不支持多进程）
+    // ============================================================
+
+    protected function singleProcessStart()
+    {
+        $this->log("端口: {$this->config['port']}");
+        $this->log("──────────────────────────────────────────");
+
+        register_shutdown_function(function() {
+            $this->log("服务已关闭");
+            if ($this->config['pid_file'] && file_exists($this->config['pid_file'])) {
+                @unlink($this->config['pid_file']);
+            }
+        });
+
+        if (function_exists('pcntl_signal')) {
+            pcntl_signal(SIGINT, function() { $this->running = false; });
+            pcntl_signal(SIGTERM, function() { $this->running = false; });
+        }
+
+        // 单进程直接运行服务
+        $server = @stream_socket_server(
+            "tcp://{$this->config['host']}:{$this->config['port']}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND | STREAM_SERVER_LISTEN
+        );
+
+        if (!$server) {
+            $this->log("❌ 启动失败: [{$errno}] {$errstr}", 'error');
+            return;
+        }
+
+        stream_set_blocking($server, false);
+        $this->runSingleServer($server);
+    }
+
+    protected function runSingleServer($server)
+    {
+        $clients = [];
+        $handshakes = [];
+        $lastPing = [];
+        $lastHeartbeat = time();
+        $lastGc = time();
+
+        $this->log("✅ 服务启动成功");
+        $this->log("🌐 地址: ws://{$this->config['host']}:{$this->config['port']}");
+        $this->log("按 Ctrl+C 停止\n");
+
+        while ($this->running) {
+            $read = array_values($clients);
+            $read[] = $server;
+            $write = null;
+            $except = null;
+
+            if (stream_select($read, $write, $except, 0, 100000) > 0) {
+                foreach ($read as $stream) {
+                    if ($stream === $server) {
+                        if (count($clients) >= $this->config['max_connections']) {
+                            $client = @stream_socket_accept($server, 0);
+                            if ($client) {
+                                fwrite($client, "HTTP/1.1 503 Service Unavailable\r\n\r\n");
+                                fclose($client);
+                            }
+                            continue;
+                        }
+
+                        $client = @stream_socket_accept($server, 0);
+                        if ($client) {
+                            stream_set_blocking($client, false);
+                            $fd = (int)$client;
+                            $clients[$fd] = $client;
+                            $handshakes[$fd] = false;
+                            $lastPing[$fd] = time();
+                            $this->onConnect($fd);
+                        }
+                        continue;
+                    }
+
+                    $fd = null;
+                    foreach ($clients as $f => $c) {
+                        if ($c === $stream) {
+                            $fd = $f;
+                            break;
+                        }
+                    }
+                    if ($fd === null) continue;
+
+                    $data = @fread($stream, 8192);
+                    if ($data === false || $data === '') {
+                        $this->closeClient($fd, $clients, $handshakes, $lastPing);
+                        continue;
+                    }
+
+                    $lastPing[$fd] = time();
+
+                    if (!$handshakes[$fd]) {
+                        if (preg_match("/Sec-WebSocket-Key: (.*)\r\n/", $data, $m)) {
+                            $accept = base64_encode(sha1(trim($m[1]) . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true));
+                            $response = "HTTP/1.1 101 Switching Protocols\r\n";
+                            $response .= "Upgrade: websocket\r\n";
+                            $response .= "Connection: Upgrade\r\n";
+                            $response .= "Sec-WebSocket-Accept: {$accept}\r\n\r\n";
+                            fwrite($stream, $response);
+                            $handshakes[$fd] = true;
+                            $this->onHandshake($fd);
+                        }
+                        continue;
+                    }
+
+                    $msg = $this->decode($data);
+                    if ($msg !== '') {
+                        $this->onMessage($fd, $msg, $stream, $clients);
+                    }
+                }
+            }
+
+            $now = time();
+            if ($now - $lastHeartbeat >= $this->config['heartbeat']) {
+                foreach ($clients as $fd => $stream) {
+                    if ($now - $lastPing[$fd] > $this->config['timeout']) {
+                        $this->closeClient($fd, $clients, $handshakes, $lastPing);
+                    }
+                }
+                $lastHeartbeat = $now;
+            }
+
+            if ($now - $lastGc > 300) {
+                gc_collect_cycles();
+                $lastGc = $now;
+            }
+
+            if (memory_get_usage(true) > $this->config['max_memory']) {
+                gc_collect_cycles();
+            }
+
+            if (function_exists('pcntl_signal_dispatch')) {
+                pcntl_signal_dispatch();
+            }
+
+            usleep(10000);
+        }
+
+        foreach ($clients as $stream) {
+            @fclose($stream);
+        }
+        @fclose($server);
+        $this->log("服务已关闭");
+        
+        if ($this->config['pid_file'] && file_exists($this->config['pid_file'])) {
+            @unlink($this->config['pid_file']);
+        }
     }
 
     // ============================================================
@@ -549,7 +814,7 @@ class WebSocketWorker
         echo $logMsg . "\n";
 
         if ($this->config['log_file']) {
-            file_put_contents($this->config['log_file'], $logMsg . "\n", FILE_APPEND);
+            @file_put_contents($this->config['log_file'], $logMsg . "\n", FILE_APPEND);
         }
     }
 
@@ -569,7 +834,6 @@ class WebSocketWorker
 
     protected function onMessage($fd, $msg, $stream, $clients)
     {
-        // 收到消息 - 默认广播
         $this->broadcast($msg, $clients);
     }
 

@@ -5,6 +5,8 @@
 
 namespace Long;
 
+use Long\App;  // ⬅️ 添加引用
+
 class Session
 {
     /**
@@ -18,25 +20,44 @@ class Session
      * @var array
      */
     protected static $config = [];
+    
     /**
      * 单例实例
      * @var self
      */
     protected static $instance = null;
+    
+    /**
+     * App 实例
+     * @var App
+     */
+    protected static $app;  // ⬅️ 添加 App 实例
+
     /**
      * 初始化 Session
      * @param array $config 配置
      */
     public static function init($config = [])
     {
+        // ⬅️ 获取 App 实例
+        self::$app = App::getInstance();
+        
+        // ✅ 使用框架的 getRuntimePath() 方法
+        $defaultSessionPath = self::$app->getRuntimePath('sessions');
+        
         self::$config = array_merge([
             'name' => 'LONGPHP_SESSION',
             'lifetime' => 7200,
-            'path' => ROOT_PATH . '/runtime/sessions/',
+            'path' => $defaultSessionPath,
             'httponly' => true,
             'secure' => false,
             'samesite' => 'lax',
         ], $config);
+
+        // 确保 Session 存储目录存在
+        if (!is_dir(self::$config['path'])) {
+            mkdir(self::$config['path'], 0755, true);
+        }
 
         session_name(self::$config['name']);
         session_save_path(self::$config['path']);
@@ -68,6 +89,7 @@ class Session
         }
         return self::$instance;
     }
+    
     /**
      * 启动 Session
      */

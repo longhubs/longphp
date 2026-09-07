@@ -1,9 +1,11 @@
 <?php
-// long/File.php
+// src/File.php
 // LongPHP Framework - 文件操作与上传类
 // 支持：文件上传、图片处理、缩略图、iOS方向修正、文件操作
 
 namespace Long;
+
+use Long\App;
 
 class File
 {
@@ -35,6 +37,12 @@ class File
      */
     private $error = '';
 
+    /**
+     * App 实例
+     * @var App
+     */
+    private static $app;
+
     // ─────────────────────────────────────────────────────────────
     // 构造函数
     // ─────────────────────────────────────────────────────────────
@@ -43,6 +51,15 @@ class File
     {
         if ($file) {
             $this->file = $file;
+        }
+
+        // 初始化 App 实例（如果还没初始化）
+        if (self::$app === null) {
+            try {
+                self::$app = App::getInstance();
+            } catch (\Exception $e) {
+                // App 未初始化，延迟到使用时再初始化
+            }
         }
     }
 
@@ -132,7 +149,7 @@ class File
             $this->error = $this->getUploadError($this->file['error']);
             return false;
         }
-        
+
         $ext = strtolower(pathinfo($this->file['name'], PATHINFO_EXTENSION));
 
         if ($this->maxSize > 0 && $this->file['size'] > $this->maxSize) {
@@ -141,14 +158,14 @@ class File
         }
 
         if (!empty($this->allowTypes)) {
-            
+
             if (!in_array($ext, $this->allowTypes)) {
                 $this->error = '不允许的文件类型: ' . $ext;
                 return false;
             }
         }
 
-        // ✅ 检查文件内容是否为真实的图片
+        // 检查文件内容是否为真实的图片
         if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'])) {
             if (!getimagesize($this->file['tmp_name'])) {
                 $this->error = '无效的图片文件（可能包含恶意代码）';
@@ -156,11 +173,11 @@ class File
             }
         }
 
-        // ✅ 检查文件 MIME 类型
+        // 检查文件 MIME 类型
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mimeType = finfo_file($finfo, $this->file['tmp_name']);
         finfo_close($finfo);
-        
+
         $allowedMimes = [
             'jpg' => 'image/jpeg',
             'jpeg' => 'image/jpeg',
@@ -172,7 +189,7 @@ class File
             'doc' => 'application/msword',
             'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ];
-        
+
         if (isset($allowedMimes[$ext]) && $mimeType !== $allowedMimes[$ext]) {
             $this->error = '文件 MIME 类型不匹配: ' . $mimeType;
             return false;
@@ -189,7 +206,7 @@ class File
      * 保存上传文件
      * @param string $path 保存目录
      * @param string|null $name 文件名（不含扩展名）
-     * @return string|false 返回保存的文件名
+     * @return array|false 返回保存的文件信息
      */
     public function save($path, $name = null)
     {
@@ -206,18 +223,18 @@ class File
         $savePath = rtrim($path, '/') . '/' . $filename;
         if (!move_uploaded_file($this->file['tmp_name'], $savePath)) {
             $this->error = '文件保存失败';
+            return false;
         }
-        $result = [
-                'name' => $filename,
-                'path' => $savePath,
-                'size' => $this->file['size'],
-                'type' => $this->file['type'],
-                'ext' => $ext,
-                'width' => 0,
-                'height' => 0,
-                'error' => $this->error
-            ];
-        return $result;
+
+        return [
+            'name'   => $filename,
+            'path'   => $savePath,
+            'size'   => $this->file['size'],
+            'type'   => $this->file['type'],
+            'ext'    => $ext,
+            'width'  => 0,
+            'height' => 0,
+        ];
     }
 
     /**
@@ -243,12 +260,11 @@ class File
         $this->ensureDirectory($path);
 
         $ext = strtolower(pathinfo($this->file['name'], PATHINFO_EXTENSION));
-        $orgName = $name?$name:$this->file['name'];
         $name = $name ?: date('YmdHis') . '_' . uniqid();
         $filename = $name . '.' . $ext;
-        
+
         $result = [
-            'name'   => $orgName,
+            'name'   => $filename,
             'path'   => $path . '/' . $filename,
             'width'  => $width,
             'height' => $height,
@@ -539,15 +555,28 @@ class File
 
     /**
      * 删除文件（支持批量）
+     * @param string|array $path 文件路径或路径数组
+     * @return bool
+     * @throws \Exception 非法文件操作时抛出异常
      */
     public static function delete($path)
     {
-        // ✅ 安全检查：防止目录遍历
-        $realPath = realpath($path);
-        $allowedDir = realpath(ROOT_PATH . '/public/uploads/');
-        
-        if ($realPath === false || strpos($realPath, $allowedDir) !== 0) {
-            throw new \Exception('非法文件操作');
+        // 获取项目根目录
+        $basePath = self::getBasePath();
+        $allowedDir = $basePath . DIRECTORY_SEPARATOR . 'public/uploads/';
+
+        // 安全检查：防止目录遍历
+        if (is_string($path)) {
+            $realPath = realpath($path);
+
+            if ($realPath === false) {
+                return false; // 文件不存在
+            }
+
+            // 确保文件在允许的目录内
+            if (strpos($realPath, realpath($allowedDir)) !== 0) {
+                throw new \Exception('非法文件操作：文件不在允许的目录内');
+            }
         }
 
         if (is_array($path)) {
@@ -569,6 +598,41 @@ class File
         }
 
         return unlink($path);
+    }
+
+    /**
+     * 获取项目根目录
+     * @return string
+     */
+    private static function getBasePath()
+    {
+        if (self::$app === null) {
+            try {
+                self::$app = App::getInstance();
+            } catch (\Exception $e) {
+                // 如果 App 未初始化，手动计算根目录
+                // 从当前文件所在目录向上查找
+                $currentDir = __DIR__;
+                $maxLevels = 10;
+
+                for ($i = 0; $i < $maxLevels; $i++) {
+                    // 检查是否包含 config/ 或 vendor/ 目录
+                    if (is_dir($currentDir . '/config') || is_dir($currentDir . '/vendor')) {
+                        return $currentDir;
+                    }
+                    $parent = dirname($currentDir);
+                    if ($parent === $currentDir) {
+                        break;
+                    }
+                    $currentDir = $parent;
+                }
+
+                // 回退：假设项目根目录是当前目录的父目录的父目录
+                return dirname(__DIR__, 2);
+            }
+        }
+
+        return self::$app->getBasePath();
     }
 
     /**

@@ -5,9 +5,27 @@
 
 namespace Long;
 
+use Long\App;  // ⬅️ 添加引用
+
 class View
 {
     protected static $vars = [];
+    
+    /**
+     * @var App
+     */
+    protected static $app;  // ⬅️ 添加 App 实例
+
+    /**
+     * 初始化 App 实例（延迟加载）
+     */
+    protected static function getApp()
+    {
+        if (self::$app === null) {
+            self::$app = App::getInstance();
+        }
+        return self::$app;
+    }
 
     public static function assign($name, $value = null)
     {
@@ -38,8 +56,11 @@ class View
         $allData = array_merge(self::$vars, $data);
         $viewPath = str_replace('.', '/', $view);
 
-        // ✅ 检查 Blade 文件
-        $bladeFile = ROOT_PATH . '/app/views/' . $viewPath . '.blade.php';
+        // ✅ 使用框架的 getAppPath() 方法获取视图目录
+        $app = self::getApp();
+        $viewDir = $app->getAppPath('views');
+        $bladeFile = $viewDir . '/' . $viewPath . '.blade.php';
+        
         if ($engine === 'auto' && file_exists($bladeFile)) {
             $engine = 'blade';
         } elseif ($engine === 'auto') {
@@ -47,7 +68,7 @@ class View
         }
 
         if ($engine === 'blade') {
-            // ✅ 直接调用 Blade::render()
+            // 直接调用 Blade::render()
             return Blade::render($view, $allData);
         }
 
@@ -57,7 +78,11 @@ class View
     protected static function renderPhp($view, $data = [])
     {
         extract($data);
-        $viewFile = ROOT_PATH . '/app/views/' . str_replace('.', '/', $view) . '.php';
+        
+        // ✅ 使用框架的 getAppPath() 方法
+        $app = self::getApp();
+        $viewFile = $app->getAppPath('views/' . str_replace('.', '/', $view) . '.php');
+        
         if (!file_exists($viewFile)) {
             throw new \Exception("视图文件不存在: {$viewFile}");
         }

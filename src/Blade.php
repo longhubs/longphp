@@ -12,6 +12,11 @@ class Blade
     protected static $instance;
     protected static $viewPath;
     protected static $cachePath;
+    
+    /**
+     * @var App
+     */
+    protected static $app;  // ⬅️ 添加 App 实例
 
     public static function init()
     {
@@ -19,8 +24,12 @@ class Blade
             return self::$instance;
         }
 
-        self::$viewPath = ROOT_PATH . '/app/views';
-        self::$cachePath = ROOT_PATH . '/storage/cache/views';
+        // ⬅️ 获取 App 实例
+        self::$app = App::getInstance();
+        
+        // ✅ 使用框架路径方法
+        self::$viewPath = self::$app->getAppPath('views');
+        self::$cachePath = self::$app->getStoragePath('cache/views');
 
         if (!is_dir(self::$viewPath)) {
             mkdir(self::$viewPath, 0755, true);

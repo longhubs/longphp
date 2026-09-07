@@ -5,6 +5,8 @@
 
 namespace Long;
 
+use Long\App;  // ⬅️ 添加引用
+
 class Model
 {
     /**
@@ -93,6 +95,12 @@ class Model
      */
     protected $field = [];
 
+    /**
+     * App 实例
+     * @var App
+     */
+    protected $app;  // ⬅️ 添加 App 实例
+
     // ─────────────────────────────────────────────────────────────
     // 构造函数
     // ─────────────────────────────────────────────────────────────
@@ -106,9 +114,14 @@ class Model
      */
     public function __construct()
     {
+        // ⬅️ 获取 App 实例
+        $this->app = App::getInstance();
+        
         $this->db = new Db();
 
-        $config = require ROOT_PATH . '/config/database.php';
+        // ✅ 使用框架的 getConfigPath() 方法
+        $configFile = $this->app->getConfigPath('database.php');
+        $config = file_exists($configFile) ? require $configFile : [];
         $prefix = $config['connections'][$config['default']]['prefix'] ?? '';
 
         if (empty($this->table)) {
@@ -122,6 +135,9 @@ class Model
         }
     }
 
+    // ... 其余所有方法保持不变（从 __callStatic 到最后的 __unset）
+    // 因为只有构造函数使用了 ROOT_PATH
+    
     // ─────────────────────────────────────────────────────────────
     // 静态调用转发
     // ─────────────────────────────────────────────────────────────
