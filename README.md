@@ -2,7 +2,7 @@
 
 > 轻量级 PHP 框架 | 简单 · 高效 · 安全 | 龙行天下
 
-[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D7.4-blue)](https://php.net)
+[![PHP Version](https://img.shields.io/badge/PHP-%3E%3D7.1-blue)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/longhubs/longphp)](https://github.com/longhubs/longphp/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/longhubs/longphp)](https://github.com/longhubs/longphp/network)
