@@ -24,7 +24,7 @@ LongPHP 是一个功能完整的轻量级 PHP 框架，致力于提供简单、�
 
 ## 📦 环境要求
 
-- PHP >= 7.4
+- PHP >= 7.1
 - Composer
 - MySQL / PostgreSQL / SQLite (PDO 扩展)
 - Redis (可选)
