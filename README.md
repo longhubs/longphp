@@ -4,63 +4,56 @@
 
 [![PHP Version](https://img.shields.io/badge/PHP-%3E%3D7.4-blue)](https://php.net)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/yourname/longphp)](https://github.com/yourname/longphp/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/yourname/longphp)](https://github.com/yourname/longphp/network)
+[![GitHub stars](https://img.shields.io/github/stars/longhubs/longphp)](https://github.com/longhubs/longphp/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/longhubs/longphp)](https://github.com/longhubs/longphp/network)
 
 LongPHP 是一个功能完整的轻量级 PHP 框架，致力于提供简单、高效、安全的 Web 开发体验。
 
 ---
 
-## ✨ 特性
+## ✨ 核心特性
 
-- 🚀 **轻量高效** - 核心代码简洁，性能优异
-- 📦 **功能完整** - 路由、ORM、模板、认证、缓存、CLI 全支持
-- 🔒 **安全可靠** - CSRF、加密 Cookie、JWT 认证
-- 🛠️ **开发友好** - 代码生成器、调试工具、命令行支持
-- 📝 **Blade 模板** - 集成 Laravel 风格 Blade 模板引擎
-- 🐉 **龙行天下** - 中文命名，易于理解
+- 🚀 轻量高效 - 核心代码精简，性能优异，开箱即用
+- 📦 功能完整 - 路由、ORM、模板引擎、缓存、JWT、CLI 全支持
+- 🔒 安全可靠 - 内置 CSRF 防护、加密 Cookie、JWT 认证
+- 🛠️ 开发友好 - 代码生成器、调试工具、丰富的命令行支持
+- 📝 Blade 模板 - 集成 Laravel 风格的 BladeOne 模板引擎
+- 🔄 数据库特性 - 支持事务、悲观锁(FOR UPDATE)、共享锁(LOCK IN SHARE MODE)
 
 ---
 
 ## 📦 环境要求
 
-- PHP >= 7.1
+- PHP >= 7.4
 - Composer
-- MySQL / PostgreSQL / SQLite
+- MySQL / PostgreSQL / SQLite (PDO 扩展)
+- Redis (可选)
 
 ---
 
 ## 🚀 安装
 
-### 通过 Composer 创建项目
+通过 Composer 创建项目:
 
-```bash
 composer create-project longphp/longphp my-project
 cd my-project
-```
 
-### 配置环境
+配置环境:
 
-```bash
 cp .env.example .env
-```
 
-编辑 `.env` 文件配置数据库信息：
+编辑 .env 文件配置数据库信息:
 
-```ini
 DB_HOST=127.0.0.1
 DB_DATABASE=longphp
 DB_USERNAME=root
 DB_PASSWORD=
-```
 
-### 生成密钥 & 启动
+生成密钥并启动:
 
-```bash
 php long key:generate
 chmod -R 755 storage/ runlogs/
 php long server
-```
 
 访问 http://localhost:8081
 
@@ -68,30 +61,27 @@ php long server
 
 ## 📁 目录结构
 
-```
 my-project/
 ├── app/
-│   ├── controller/              控制器
-│   ├── model/                   模型
-│   ├── service/                 业务逻辑层
-│   ├── middleware/              中间件
-│   ├── validate/                验证器
-│   └── views/                   视图模板
-├── config/                      配置文件
-├── public/                      公共入口
-├── route/                       路由定义
-├── runlogs/                     日志目录
-├── storage/                     存储目录
-├── vendor/                      Composer 依赖
-├── long                         CLI 命令行入口
-└── .env                         环境变量
-```
+│   ├── controller/         控制器
+│   ├── model/              模型
+│   ├── service/            业务逻辑层
+│   ├── middleware/         中间件
+│   ├── validate/           验证器
+│   └── views/              视图模板
+├── config/                 配置文件
+├── public/                 公共入口
+├── route/                  路由定义
+├── runlogs/                日志目录
+├── storage/                存储目录
+├── vendor/                 Composer 依赖
+├── long                    CLI 命令行入口
+└── .env                    环境变量
 
 ---
 
 ## 🛣️ 路由定义
 
-```php
 use Long\Route;
 
 // 基本路由
@@ -99,7 +89,7 @@ Route::get('/', 'IndexController@index');
 Route::get('/user/{id}', 'UserController@show');
 Route::post('/user/login', 'UserController@login');
 
-// 路由分组
+// 路由分组 + 中间件
 Route::group('/admin', function() {
     Route::get('/users', 'AdminController@users');
     Route::get('/posts', 'AdminController@posts');
@@ -112,15 +102,13 @@ Route::resource('/posts', 'PostController');
 Route::miss(function() {
     return error('页面不存在', 404);
 });
-```
 
 ---
 
 ## 🎮 控制器
 
-```php
-<?php
-// app/controller/UserController.php
+app/controller/UserController.php
+
 namespace app\controller;
 
 use Long\Controller;
@@ -161,13 +149,9 @@ class UserController extends Controller
         return success('删除成功');
     }
 }
-```
 
-### 依赖注入
+依赖注入示例:
 
-```php
-<?php
-// app/controller/UserController.php
 namespace app\controller;
 
 use Long\Controller;
@@ -187,23 +171,17 @@ class UserController extends Controller
         return success('获取成功', $this->userService->getList());
     }
 }
-```
 
 ---
 
 ## 📦 模型
 
-### 创建模型
+创建模型:
 
-```bash
 php long make:model User
-```
 
-### 基础模型
+基础模型 app/model/UserModel.php:
 
-```php
-<?php
-// app/model/UserModel.php
 namespace app\model;
 
 use Long\Model;
@@ -215,11 +193,9 @@ class UserModel extends Model
     protected $autoWriteTimestamp = true;
     protected $deleteTime = 'deleted';
 }
-```
 
-### 常用方法
+常用方法:
 
-```php
 // 查询
 $user = UserModel::findById(1);
 $list = UserModel::getAllList(['status' => 1]);
@@ -235,11 +211,9 @@ UserModel::updateById(1, ['name' => '李四']);
 UserModel::deleteById(1);
 UserModel::softDeleteById(1);
 UserModel::restoreData(1);
-```
 
-### 链式查询
+链式查询:
 
-```php
 $list = UserModel::where('status', 1)
     ->where('age', '>', 18)
     ->whereIn('id', '1,2,3,4,5')
@@ -247,13 +221,11 @@ $list = UserModel::where('status', 1)
     ->order('create_time DESC')
     ->page(1, 10)
     ->select();
-```
 
 ---
 
 ## 🗄️ 数据库查询构造器
 
-```php
 use Long\Db;
 
 // 查询
@@ -278,63 +250,79 @@ Db::table('users')->where('id', 1)->update(['name' => '李四']);
 
 // 删除
 Db::table('users')->where('id', 1)->delete();
-```
 
-### 高级查询
+高级查询:
 
-```php
-// IN 查询（支持逗号字符串）
+// IN 查询
 Db::table('users')->whereIn('id', '1,2,3,4,5')->select();
 
-// LIKE
+// LIKE 模糊查询
 Db::table('users')->whereLike('name', '%张三%')->select();
 
 // FIND_IN_SET
 Db::table('products')->whereFindInSet('tags', 'php')->select();
 
-// BETWEEN
+// BETWEEN 区间查询
 Db::table('users')->whereBetween('age', 18, 30)->select();
 
-// 原生 SQL
+// 原生 SQL 条件
 Db::table('users')->whereRaw('age > ? AND status = ?', [18, 1])->select();
 
-// JOIN
+// JOIN 关联查询
 Db::table('users as u')
     ->join('profiles p', 'u.id = p.user_id')
     ->where('u.status', 1)
     ->select();
 
-// 分页
+// 分页查询
 $result = Db::table('users')->paginate(1, 15);
 
 // 原生查询
 $list = Db::query("SELECT * FROM users WHERE status = ?", [1]);
 Db::execute("UPDATE users SET status = ? WHERE id = ?", [1, 1]);
-```
 
-### 查看 SQL 日志
+事务与行锁:
 
-```php
+use Long\Db;
+
+try {
+    Db::beginTransaction();
+
+    // 排他锁 FOR UPDATE
+    $user = Db::table('users')
+        ->where('id', 1)
+        ->lockForUpdate()
+        ->find();
+
+    // 共享锁 LOCK IN SHARE MODE
+    $profile = Db::table('profiles')
+        ->where('user_id', 1)
+        ->sharedLock()
+        ->find();
+
+    Db::commit();
+} catch (Exception $e) {
+    Db::rollback();
+}
+
+查看 SQL 日志:
+
 use Long\Db;
 
 Db::clearLogs();
 $list = Db::table('users')->select();
-echo Db::getLastFullSql();  // 显示完整 SQL（含参数）
-```
+echo Db::getLastFullSql();
 
 ---
 
 ## 📝 模板引擎
 
-LongPHP 集成了 BladeOne 模板引擎（Laravel Blade 风格）。
+控制器中渲染视图:
 
-```php
-// 控制器中渲染
 return view('user.profile', ['user' => $user]);
-```
 
-```blade
-<!-- app/views/user/profile.blade.php -->
+Blade 模板示例 app/views/user/profile.blade.php:
+
 @extends('layouts.app')
 
 @section('title', '用户资料')
@@ -351,25 +339,19 @@ return view('user.profile', ['user' => $user]);
         <a href="{{ url('login') }}">请登录</a>
     @endguest
 @endsection
-```
 
-### 内置 Blade 指令
+内置 Blade 指令:
 
-```blade
-@datetime($timestamp)     // 格式化时间
-@config('app.name')       // 获取配置
-@auth                     // 登录判断
-@endauth
-@guest                    // 未登录判断
-@endguest
-@url('user/index')        // 生成 URL
-```
+@datetime($timestamp)     格式化时间
+@config('app.name')       获取配置
+@auth / @endauth          登录判断
+@guest / @endguest        未登录判断
+@url('user/index')        生成 URL
 
 ---
 
 ## 🔐 JWT 认证
 
-```php
 use Long\Token;
 
 $token = new Token();
@@ -392,24 +374,20 @@ $newPair = $token->refresh($refreshToken);
 // 获取当前用户
 $user = $token->currentUser();
 $userId = $token->currentUserId();
-```
 
-### 助手函数
+助手函数:
 
-```php
 $pair = set_token(['user_id' => 1]);
 $result = verify_token($token);
 $new = refresh_token($refreshToken);
 $token = header_token();
 $user = token_user();
 $userId = token_user_id();
-```
 
 ---
 
 ## 📤 文件上传
 
-```php
 use Long\File;
 
 $file = File::upload('avatar');
@@ -425,133 +403,93 @@ if ($result) {
 } else {
     echo $file->getError();
 }
-```
 
 ---
 
 ## 🖥️ 命令行工具
 
-### 开发服务器
+开发服务器:
 
-```bash
-php long server          # 启动服务器（默认 8081 端口）
-php long server 8080     # 指定端口
-```
+php long server          启动服务器(默认 8081 端口)
+php long server 8080     指定端口
 
-### 代码生成器
+代码生成器:
 
-```bash
-php long make:controller UserController      # 生成控制器
-php long make:model User                     # 生成模型
-php long make:middleware Auth                # 生成中间件
-php long make:validate UserValidate          # 生成验证器
-```
+php long make:controller UserController     生成控制器
+php long make:model User                    生成模型
+php long make:middleware Auth               生成中间件
+php long make:validate UserValidate         生成验证器
 
-### 定时任务
+定时任务:
 
-```bash
-php long list        # 列出所有任务
-php long run         # 执行到期任务
-php long work        # 常驻运行模式（调试）
-php long start       # 后台启动调度器（生产）
-php long stop        # 停止调度器
-php long status      # 查看状态
-```
+php long list       列出所有任务
+php long run        执行到期任务
+php long work       常驻运行模式(调试)
+php long start      后台启动调度器(生产)
+php long stop       停止调度器
+php long status     查看状态
 
 ---
 
 ## 🔧 助手函数
 
-### 调试
+调试:
+dd($data)           打印并退出
+dump($data)         打印不退出
+p($data)            美化打印
+logs('信息', 'info')  记录日志
 
-```php
-dd($data);          // 打印并退出
-dump($data);        // 打印不退出
-p($data);           // 美化打印
-logs('信息', 'info'); // 记录日志
-```
+JSON 响应:
+success('获取成功', $data)    成功响应
+error('参数错误', 400)        错误响应
+json($data, 200)             自定义 JSON
+api_result(0, '成功', $data)  API 响应
 
-### JSON 响应
+请求/输入:
+input('id', 0)      获取参数
+request()           请求对象
+I('post.name')      ThinkPHP 风格
 
-```php
-success('获取成功', $data);    // 成功响应
-error('参数错误', 400);        // 错误响应
-json($data, 200);             // 自定义 JSON
-api_result(0, '成功', $data);  // API 响应
-```
+缓存:
+cache('key', 'value', 3600)           设置缓存
+$value = cache('key')                 获取缓存
+remember('key', function(){}, 3600)   缓存回调
 
-### 请求/输入
+数据库快捷操作:
+db('users')->where('id', 1)->find()
+M('users')->where('id', 1)->find()
+D('User')->where('id', 1)->find()
 
-```php
-input('id', 0);      // 获取参数
-request();           // 请求对象
-I('post.name');      // ThinkPHP 风格
-```
-
-### 缓存
-
-```php
-cache('key', 'value', 3600);  // 设置缓存
-$value = cache('key');        // 获取缓存
-remember('key', function() { return 'value'; }, 3600);  // 缓存回调
-```
-
-### 数据库快捷操作
-
-```php
-db('users')->where('id', 1)->find();
-M('users')->where('id', 1)->find();
-D('User')->where('id', 1)->find();
-```
-
-### 其他
-
-```php
-get_ip();                    // 获取客户端 IP
-uuid();                      // 生成 UUID
-order_no('ORD');            // 生成订单号
-is_mobile();                 // 判断移动端
-current_url();               // 获取当前 URL
-redirect('/home');           // 重定向
-hash_password('123456');     // 密码加密
-rand_code(6);                // 生成验证码
-```
+其他:
+get_ip()             获取客户端 IP
+uuid()               生成 UUID
+order_no('ORD')      生成订单号
+is_mobile()          判断移动端
+current_url()        获取当前 URL
+redirect('/home')    重定向
+hash_password('123456')  密码加密
+rand_code(6)         生成验证码
 
 ---
 
 ## ❓ 常见问题
 
-### 如何开启调试模式？
+如何开启调试模式？
+config/app.php 中设置 'debug' => true
 
-```php
-// config/app.php
-'debug' => true,
-```
-
-### 如何查看 SQL 日志？
-
-```php
+如何查看 SQL 日志？
 use Long\Db;
-
 Db::clearLogs();
 $list = Db::table('users')->select();
 echo Db::getLastFullSql();
-```
 
-### 如何定义 404 页面？
-
-```php
+如何定义 404 页面？
 Route::miss(function() {
     return view('errors.404');
 });
-```
 
-### 如何运行定时任务？
-
-```bash
-# 添加系统 Cron（每分钟执行）
+如何运行定时任务？
 * * * * * cd /path/to/project && php long run >> runlogs/logs/cron.log 2>&1
-```
 
 ---
 
@@ -569,8 +507,8 @@ MIT License
 
 ## 📬 联系
 
-- GitHub: https://github.com/longhubs/longphp
+GitHub: https://github.com/longhubs/longphp
 
 ---
 
-**🐉 龙行天下，LongPHP 伴你同行！**
+🐉 龙行天下，LongPHP 伴你同行！
