@@ -66,15 +66,13 @@ class Session
         ini_set('session.gc_maxlifetime', self::$config['lifetime']);
         ini_set('session.cookie_lifetime', self::$config['lifetime']);
 
-        session_set_cookie_params([
-            'lifetime' => self::$config['lifetime'],
-            'path' => '/',
-            'domain' => '',
-            'secure' => self::$config['secure'],
-            'httponly' => self::$config['httponly'],
-            'samesite' => self::$config['samesite'],
-        ]);
-
+        session_set_cookie_params(
+            self::$config['lifetime'],
+            '/',
+            '',
+            self::$config['secure'],
+            self::$config['httponly']
+        );
         self::start();
     }
 
