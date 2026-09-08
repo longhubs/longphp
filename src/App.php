@@ -56,7 +56,7 @@ class App
      * 是否已加载 Helper
      */
     protected $helperLoaded = false;
-
+    protected $commonLoaded = false;  // ⭐ 新增
     // ─────────────────────────────────────────────────────────────
     // 构造函数
     // ─────────────────────────────────────────────────────────────
@@ -74,6 +74,9 @@ class App
 
         // 3. 加载系统辅助函数
         $this->loadHelper();
+
+        // ⭐ 加载用户自定义函数（common.php）
+        $this->loadCommon();
 
         // 4. 加载配置文件
         $this->config = $this->loadConfig();
@@ -94,11 +97,23 @@ class App
         $this->route = new Route();
         $this->loadRoutes();
     }
-
+    /**
+     * 加载用户自定义函数文件
+     */
+    protected function loadCommon()
+    {
+        if ($this->commonLoaded) {
+            return;
+        }
+        $commonFile = $this->getAppPath('common.php');
+        if (file_exists($commonFile)) {
+            require_once $commonFile;
+            $this->commonLoaded = true;
+        }
+    }
     // ============================================================
     // 路径管理
     // ============================================================
-
     /**
      * 设置根目录
      */
