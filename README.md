@@ -33,11 +33,6 @@ LongPHP 是一个功能完整的轻量级 PHP 框架，致力于提供简单、�
 
 ## 🚀 安装
 
-通过 Composer 创建项目:
-
-composer create-project longphp/longphp my-project
-cd my-project
-
 配置环境:
 
 cp .env.example .env
